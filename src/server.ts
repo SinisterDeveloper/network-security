@@ -1,7 +1,9 @@
 import express, { Application, Request, Response, NextFunction } from 'express';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { buildRouter } from './routeHandler.js';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROUTERS_DIR = path.join(__dirname, 'routers');
 
 /**
@@ -9,7 +11,7 @@ const ROUTERS_DIR = path.join(__dirname, 'routers');
  * Dynamic routes are loaded from `src/routers/` following the
  * Next.js-style file-system routing convention.
  */
-export function createApp(): Application {
+export async function createApp(): Promise<Application> {
   const app = express();
 
   // Parse JSON request bodies
@@ -19,7 +21,8 @@ export function createApp(): Application {
 
   // Mount all file-system routes discovered under src/routers/
   console.log('[server] Registering file-system routes:');
-  app.use('/', buildRouter(ROUTERS_DIR));
+  const router = await buildRouter(ROUTERS_DIR);
+  app.use('/', router);
 
   // 404 handler – no route matched
   app.use((_req: Request, res: Response) => {

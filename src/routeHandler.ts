@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import path from 'path';
 import fs from 'fs';
+import { pathToFileURL } from 'url';
 import { HttpMethod, RouteModule, asyncHandler } from './types.js';
 
 const HTTP_METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
@@ -51,15 +52,15 @@ function collectRouteFiles(dir: string): string[] {
  *   src/routers/admin/logs.ts  -> GET /admin/logs, POST /admin/logs, …
  *   src/routers/client/users.ts -> GET /client/users, …
  */
-export function buildRouter(routersDir: string): Router {
+export async function buildRouter(routersDir: string): Promise<Router> {
   const router = Router();
 
   const routeFiles = collectRouteFiles(routersDir);
 
   for (const filePath of routeFiles) {
     const routePath = filePathToRoutePath(routersDir, filePath);
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const mod: RouteModule = require(filePath) as RouteModule;
+    const moduleUrl = pathToFileURL(filePath).href;
+    const mod: RouteModule = (await import(moduleUrl)) as RouteModule;
 
     let registered = false;
     for (const method of HTTP_METHODS) {
