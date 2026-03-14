@@ -22,3 +22,19 @@ export function asyncHandler(
     Promise.resolve(fn(req, res, next)).catch(next);
   };
 }
+
+export interface Device {
+	id: number;
+	name: string;
+	puf: string;
+	mac: string;
+	messages: Message[];
+	registeredAt: number;
+}
+
+export interface Message {
+	data: any;
+	timestamp: number;
+	hash: any;
+	sender: string;
+}
