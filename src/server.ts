@@ -1,6 +1,6 @@
 import express, { Application, Request, Response, NextFunction } from 'express';
 import path from 'path';
-import { buildRouter } from './routeHandler';
+import { buildRouter } from './routeHandler.js';
 
 const ROUTERS_DIR = path.join(__dirname, 'routers');
 

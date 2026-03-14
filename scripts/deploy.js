@@ -1,8 +1,12 @@
+import "dotenv/config";
 import hre from "hardhat";
 
+const CONTRACT_NAME = process.env.CONTRACT_NAME || "HashStorage";
+
 async function main() {
-  const { ethers } = await hre.network.connect();
-  const Contract = await ethers.getContractFactory("HashStorage");
+  const connection = await hre.network.connect();
+  const { ethers } = connection;
+  const Contract = await ethers.getContractFactory(CONTRACT_NAME);
   const contract = await Contract.deploy();
 
   await contract.waitForDeployment();

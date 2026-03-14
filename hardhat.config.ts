@@ -1,5 +1,15 @@
 import hardhatEthers from "@nomicfoundation/hardhat-ethers";
+import { config as loadEnv } from "dotenv";
 import { defineConfig } from "hardhat/config";
+
+loadEnv();
+
+const amoyRpcUrl =
+  process.env.AMOY_RPC_URL ||
+  process.env.AMOY_RPC ||
+  process.env.RPC_URL ||
+  "https://rpc-amoy.polygon.technology";
+const amoyPrivateKey = process.env.AMOY_PRIVATE_KEY || process.env.PRIVATE_KEY;
 
 export default defineConfig({
   plugins: [hardhatEthers],
@@ -9,10 +19,8 @@ export default defineConfig({
   networks: {
     amoy: {
       type: "http",
-      url: "https://rpc-amoy.polygon.technology",
-      accounts: [
-        "0xca67da8fcbdfbffef18e2250350dad4a09d445713738ccfa03a9fc94b43b02a9",
-      ],
+      url: amoyRpcUrl,
+      accounts: amoyPrivateKey ? [amoyPrivateKey] : [],
       chainId: 80002,
     },
   },

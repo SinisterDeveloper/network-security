@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import path from 'path';
 import fs from 'fs';
-import { HttpMethod, RouteModule, asyncHandler } from './types';
+import { HttpMethod, RouteModule, asyncHandler } from './types.js';
 
 const HTTP_METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
 
