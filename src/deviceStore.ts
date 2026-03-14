@@ -16,8 +16,12 @@ export interface NewDeviceRecord {
 
 let newDevice: NewDeviceRecord | null = null;
 
-export function logAction(key: LogKey, value: unknown): void {
-  Logs.push({ key, value });
+export function logAction(
+  key: LogKey,
+  value: unknown,
+  id: string | null = null
+): void {
+  Logs.push({ key, value, timestamp: Date.now(), id });
 }
 
 /**

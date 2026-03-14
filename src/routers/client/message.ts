@@ -41,6 +41,7 @@ export const POST = async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
+
   const device = deviceStore.get(normalizedId);
   if (!device) {
     res.status(404).json({ error: 'Device not found' });
@@ -52,6 +53,12 @@ export const POST = async (req: Request, res: Response): Promise<void> => {
     res.status(500).json({ error: 'Device secret key not found' });
     return;
   }
+
+  logAction(
+    "ENCRYPTION",
+    { deviceId: device.id, data: kyberCiphertextBase64 },
+    device.id,
+  );
 
   let plaintext: string;
   try {
@@ -82,7 +89,7 @@ export const POST = async (req: Request, res: Response): Promise<void> => {
   };
 
   device.messages.push(message);
-  logAction('DECRYPTION', { deviceId: device.id, message });
+  logAction('DECRYPTION', { deviceId: device.id, message }, device.id);
 
   res.status(201).json(message);
 };
@@ -106,10 +113,14 @@ export const GET = (req: Request, res: Response): void => {
     return;
   }
 
-  logAction('MESSAGE_RETRIEVAL', {
-    deviceId: device.id,
-    messageCount: device.messages.length,
-  });
+  logAction(
+    'MESSAGE_RETRIEVAL',
+    {
+      deviceId: device.id,
+      messageCount: device.messages.length,
+    },
+    device.id
+  );
 
   res.status(200).json(device.messages);
 };

@@ -30,12 +30,12 @@ export const POST = (req: Request, res: Response): void => {
 
   const newDevice = req.body as NewDeviceRecord;
   setNewDeviceDetected(newDevice);
-  logAction('NEW_DEVICE_DETECTED', newDevice);
+  logAction('NEW_DEVICE_DETECTED', newDevice, null);
   res.status(200).json({ newDeviceDetected: newDevice });
 };
 
 export const GET = (_req: Request, res: Response): void => {
   const current = getNewDeviceDetected();
-  logAction('NEW_DEVICE_FETCH', current);
+  logAction('NEW_DEVICE_FETCH', current, null);
   res.status(200).json(current);
 };

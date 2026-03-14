@@ -48,11 +48,12 @@ export type LogKey =
 	| 'ENCRYPTION'
 	| 'MESSAGE_RETRIEVAL'
 	| 'METADATA_LIST'
-	| 'ADMIN_LOGS_VIEW'
 	| 'NEW_DEVICE_DETECTED'
 	| 'NEW_DEVICE_FETCH';
 
 export interface LogEntry {
 	key: LogKey;
 	value: unknown;
+	timestamp: number;
+	id: string | null;
 }

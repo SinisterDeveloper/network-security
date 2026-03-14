@@ -1,75 +1,4 @@
-# EmbSecServer
-
-A Node.js/TypeScript REST API server for managing embedded devices with post-quantum encryption (ML-KEM-768 / Kyber) and blockchain-backed message integrity via Polygon Amoy.
-
----
-
-## Table of Contents
-
-- [Tech Stack](#tech-stack)
-- [Setup](#setup)
-  - [Environment Variables](#environment-variables)
-  - [Install & Run](#install--run)
-- [API Reference](#api-reference)
-  - [Data Models](#data-models)
-  - [Client Endpoints](#client-endpoints)
-    - [POST /client/device](#post-clientdevice)
-    - [DELETE /client/device](#delete-clientdevice)
-    - [POST /client/message](#post-clientmessage)
-    - [GET /client/message](#get-clientmessage)
-    - [GET /client/metadata](#get-clientmetadata)
-  - [Admin Endpoints](#admin-endpoints)
-    - [GET /admin/logs](#get-adminlogs)
-- [Error Responses](#error-responses)
-
----
-
-## Tech Stack
-
-| Component | Technology |
-|---|---|
-| Runtime | Node.js (ES Modules) |
-| Language | TypeScript |
-| Framework | Express v5 |
-| Cryptography | ML-KEM-768 (Kyber) + AES-256-GCM |
-| Blockchain | Polygon Amoy (testnet) via ethers v6 |
-| Smart Contract | Solidity — `HashStorage` |
-
----
-
-## Setup
-
-### Environment Variables
-
-Create a `.env` file in the project root with the following variables:
-
-| Variable | Required | Description |
-|---|---|---|
-| `PORT` | No | Port the server listens on (default: `3000`) |
-| `AMOY_RPC_URL` | Yes | Polygon Amoy RPC endpoint URL |
-| `PRIVATE_KEY` | Yes | Ethereum wallet private key used to sign contract transactions |
-| `CONTRACT_ADDRESS` | Yes | Address of the deployed `HashStorage` smart contract |
-| `CONTRACT_NAME` | No | Smart contract name (default: `"HashStorage"`) |
-
-### Install & Run
-
-```bash
-# Install dependencies
-npm install
-
-# Development (hot-reload)
-npm run dev
-
-# Production build
-npm run build
-npm start
-```
-
-The server will start at `http://localhost:<PORT>` (default port **3000**).
-
----
-
-## API Reference
+# API Reference
 
 All request and response bodies use `Content-Type: application/json`.
 
@@ -96,6 +25,15 @@ All request and response bodies use `Content-Type: application/json`.
 | `timestamp` | `number` | Unix timestamp in milliseconds when the message was stored |
 | `hash` | `string` | SHA-256 hex digest of `{ data, timestamp, deviceId }` — also stored on-chain |
 | `sender` | `string` | Device ID of the sender |
+
+#### LogEntry
+
+| Field | Type | Description |
+|---|---|---|
+| `key` | `string` | Event name such as `DEVICE_CONNECT`, `DEVICE_DISCONNECT`, `DECRYPTION`, `MESSAGE_RETRIEVAL`, `METADATA_LIST`, `NEW_DEVICE_DETECTED`, or `NEW_DEVICE_FETCH` |
+| `value` | `any` | Event payload (e.g., the device object when a device connects, message metadata after decryption, logs snapshots, etc.) |
+| `timestamp` | `number` | Unix timestamp (ms) when the log entry was recorded |
+| `id` | `string` \| `null` | Device ID associated with the event (`null` when no specific device applies) |
 
 ---
 
@@ -335,13 +273,13 @@ HTTP/1.1 200 OK
 
 #### GET /admin/logs
 
-Returns every registered device in the store. Intended for administrative inspection.
+Returns both the current device catalog and the chronological `Logs` array. Each `LogEntry` pairs an event `key` with a `value` payload describing the action (e.g. device metadata on `DEVICE_CONNECT` or message details after `DECRYPTION`) and includes `timestamp`/`id` fields for auditability.
 
 **Responses**
 
 | Status | Description |
 |---|---|
-| `200 OK` | Returns an array of all `Device` objects (may be empty) |
+| `200 OK` | Returns `{ devices: Device[], logs: LogEntry[] }` (each array may be empty) |
 
 **Example Request**
 
@@ -354,25 +292,58 @@ GET /admin/logs
 ```json
 HTTP/1.1 200 OK
 
-[
-  {
-    "id": "42731",
-    "name": "sensor-01",
-    "puf": "a3f1c2d4e5...",
-    "mac": "AA:BB:CC:DD:EE:FF",
-    "publicKey": "<base64-encoded ML-KEM-768 public key>",
-    "messages": [
-      {
-        "data": "hello from sensor",
-        "timestamp": 1710001000000,
-        "hash": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
-        "sender": "42731"
-      }
-    ],
-    "registeredAt": 1710000000000,
-    "firmwareHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-  }
-]
+{
+  "devices": [
+    {
+      "id": "42731",
+      "name": "sensor-01",
+      "puf": "a3f1c2d4e5...",
+      "mac": "AA:BB:CC:DD:EE:FF",
+      "publicKey": "<base64-encoded ML-KEM-768 public key>",
+      "messages": [
+        {
+          "data": "hello from sensor",
+          "timestamp": 1710001000000,
+          "hash": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+          "sender": "42731"
+        }
+      ],
+      "registeredAt": 1710000000000,
+      "firmwareHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "logs": [
+    {
+      "key": "DEVICE_CONNECT",
+      "value": {
+        "id": "42731",
+        "name": "sensor-01",
+        "puf": "a3f1c2d4e5...",
+        "mac": "AA:BB:CC:DD:EE:FF",
+        "publicKey": "<base64-encoded ML-KEM-768 public key>",
+        "messages": [],
+        "registeredAt": 1710000000000,
+        "firmwareHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "timestamp": 1710000001000,
+      "id": "42731"
+    },
+    {
+      "key": "DECRYPTION",
+      "value": {
+        "deviceId": "42731",
+        "message": {
+          "data": "hello from sensor",
+          "timestamp": 1710001000000,
+          "hash": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+          "sender": "42731"
+        }
+      },
+      "timestamp": 1710001002000,
+      "id": "42731"
+    }
+  ]
+}
 ```
 
 ---
