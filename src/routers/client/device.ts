@@ -14,10 +14,11 @@ import { generateKyberKeyPair } from '../../crypto/kyber.js';
  * Body: { name: string; puf: string; mac: string }
  */
 export const POST = async (req: Request, res: Response): Promise<void> => {
-  const { name, puf, mac } = req.body as {
+  const { name, puf, mac, firmwareHash } = req.body as {
     name?: string;
     puf?: string;
     mac?: string;
+    firmwareHash?: string;
   };
 
   if (!name || typeof name !== 'string') {
@@ -30,6 +31,11 @@ export const POST = async (req: Request, res: Response): Promise<void> => {
   }
   if (!mac || typeof mac !== 'string') {
     res.status(400).json({ error: '"mac" (string) is required' });
+    return;
+  }
+
+  if (!firmwareHash || typeof firmwareHash !== "string") {
+    res.status(400).json({ error: '"firmwareHash" (string) is required' });
     return;
   }
 
@@ -51,6 +57,7 @@ export const POST = async (req: Request, res: Response): Promise<void> => {
     publicKey,
     messages: [],
     registeredAt: Date.now(),
+    firmwareHash
   };
 
   deviceStore.set(device.id, device);

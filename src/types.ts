@@ -31,6 +31,7 @@ export interface Device {
 	publicKey: string;
 	messages: Message[];
 	registeredAt: number;
+	firmwareHash: string;
 }
 
 export interface Message {
