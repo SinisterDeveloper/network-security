@@ -4,6 +4,7 @@ import {
   generateUniqueDeviceId,
   normalizeDeviceId,
   secretKeys,
+  setNewDeviceDetected
 } from '../../deviceStore.js';
 import { Device } from '../../types.js';
 import { generateKyberKeyPair } from '../../crypto/kyber.js';
@@ -39,6 +40,8 @@ export const POST = async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
+  setNewDeviceDetected(null);
+
   let id: string;
   try {
     id = generateUniqueDeviceId();
@@ -50,18 +53,20 @@ export const POST = async (req: Request, res: Response): Promise<void> => {
   const { publicKey, secretKey } = await generateKyberKeyPair();
 
   const device: Device = {
-    id,
-    name,
-    puf,
-    mac,
-    publicKey,
+    id: id,
+    name: name,
+    puf: puf,
+    mac: mac,
+    publicKey: publicKey,
     messages: [],
     registeredAt: Date.now(),
-    firmwareHash
+    firmwareHash: firmwareHash
   };
 
   deviceStore.set(device.id, device);
   secretKeys.set(device.id, secretKey);
+
+  console.log('New Device:\n', device);
 
   res.status(201).json(device);
 };

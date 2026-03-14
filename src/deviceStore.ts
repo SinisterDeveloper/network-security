@@ -7,6 +7,25 @@ const MAX_ID_ATTEMPTS = 10000;
 export const deviceStore = new Map<string, Device>();
 export const secretKeys = new Map<string, Uint8Array>();
 
+export interface NewDeviceRecord {
+  mac: string;
+  puf: string;
+  firmwareHash: string;
+}
+
+let newDevice: NewDeviceRecord | null = null;
+
+/**
+ * Store the latest detected device information for /admin integration.
+ */
+export function setNewDeviceDetected(device: NewDeviceRecord | null): void {
+  newDevice = device;
+}
+
+export function getNewDeviceDetected(): NewDeviceRecord | null {
+  return newDevice;
+}
+
 export function generateUniqueDeviceId(): string {
   if (deviceStore.size >= MAX_DEVICE_ID - MIN_DEVICE_ID + 1) {
     throw new Error('Device store is full');

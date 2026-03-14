@@ -1,6 +1,7 @@
 import express, { Application, Request, Response, NextFunction } from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import cors from 'cors';
 import { buildRouter } from './routeHandler.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -13,6 +14,8 @@ const ROUTERS_DIR = path.join(__dirname, 'routers');
  */
 export async function createApp(): Promise<Application> {
   const app = express();
+
+  app.use(cors());
 
   // Parse JSON request bodies
   app.use(express.json());
