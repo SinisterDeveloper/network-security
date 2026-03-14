@@ -11,4 +11,11 @@ const contract = new ethers.Contract(
   wallet,
 );
 
-export default contract;
+export default async function storeHash(hash: any, metadata: any) {
+  const tx = await contract.storeHash(hash, metadata);
+
+  await tx.wait();
+
+  return tx.hash;
+}
+
