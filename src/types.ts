@@ -24,7 +24,7 @@ export function asyncHandler(
 }
 
 export interface Device {
-	id: number;
+	id: string;
 	name: string;
 	puf: string;
 	mac: string;

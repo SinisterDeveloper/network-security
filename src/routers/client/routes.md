@@ -44,7 +44,7 @@ data: any;
 
 Returns: Message
 
-### GET: /client/messages?id={id}
+### GET: /client/message?id={id}
 
 Description: Returns list of messages fetched from Device#messages
 
