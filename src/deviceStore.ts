@@ -5,6 +5,7 @@ const MAX_DEVICE_ID = 99999;
 const MAX_ID_ATTEMPTS = 10000;
 
 export const deviceStore = new Map<string, Device>();
+export const secretKeys = new Map<string, Uint8Array>();
 
 export function generateUniqueDeviceId(): string {
   if (deviceStore.size >= MAX_DEVICE_ID - MIN_DEVICE_ID + 1) {

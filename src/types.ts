@@ -28,6 +28,7 @@ export interface Device {
 	name: string;
 	puf: string;
 	mac: string;
+	publicKey: string;
 	messages: Message[];
 	registeredAt: number;
 }

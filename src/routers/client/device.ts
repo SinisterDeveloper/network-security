@@ -1,13 +1,19 @@
 import { Request, Response } from 'express';
-import { deviceStore, generateUniqueDeviceId, normalizeDeviceId } from '../../deviceStore.js';
+import {
+  deviceStore,
+  generateUniqueDeviceId,
+  normalizeDeviceId,
+  secretKeys,
+} from '../../deviceStore.js';
 import { Device } from '../../types.js';
+import { generateKyberKeyPair } from '../../crypto/kyber.js';
 
 /**
  * POST /client/device
  * Creates a Device object with a unique 5-digit id.
  * Body: { name: string; puf: string; mac: string }
  */
-export const POST = (req: Request, res: Response): void => {
+export const POST = async (req: Request, res: Response): Promise<void> => {
   const { name, puf, mac } = req.body as {
     name?: string;
     puf?: string;
@@ -35,16 +41,20 @@ export const POST = (req: Request, res: Response): void => {
     return;
   }
 
+  const { publicKey, secretKey } = await generateKyberKeyPair();
+
   const device: Device = {
     id,
     name,
     puf,
     mac,
+    publicKey,
     messages: [],
     registeredAt: Date.now(),
   };
 
   deviceStore.set(device.id, device);
+  secretKeys.set(device.id, secretKey);
 
   res.status(201).json(device);
 };
@@ -69,5 +79,6 @@ export const DELETE = (req: Request, res: Response): void => {
   }
 
   deviceStore.delete(normalizedId);
+  secretKeys.delete(normalizedId);
   res.status(200).json({ deleted: true, id: normalizedId });
 };
