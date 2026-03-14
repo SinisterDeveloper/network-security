@@ -27,6 +27,7 @@
     "hardhat": "^3.1.12"
   },
   "devDependencies": {
+    "@nomicfoundation/hardhat-ethers": "^4.0.6",
     "@types/express": "^5.0.6",
     "@types/node": "^22.19.15",
     "nodemon": "^3.1.14",

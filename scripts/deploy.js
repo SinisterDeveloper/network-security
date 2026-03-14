@@ -1,7 +1,8 @@
-const hre = require("hardhat");
+import hre from "hardhat";
 
 async function main() {
-  const Contract = await hre.ethers.getContractFactory("HashStorage");
+  const { ethers } = await hre.network.connect();
+  const Contract = await ethers.getContractFactory("HashStorage");
   const contract = await Contract.deploy();
 
   await contract.waitForDeployment();
@@ -9,4 +10,7 @@ async function main() {
   console.log("Contract deployed to:", await contract.getAddress());
 }
 
-main();
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
