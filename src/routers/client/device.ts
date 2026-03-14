@@ -2,9 +2,10 @@ import { Request, Response } from 'express';
 import {
   deviceStore,
   generateUniqueDeviceId,
+  logAction,
   normalizeDeviceId,
   secretKeys,
-  setNewDeviceDetected
+  setNewDeviceDetected,
 } from '../../deviceStore.js';
 import { Device } from '../../types.js';
 import { generateKyberKeyPair } from '../../crypto/kyber.js';
@@ -65,6 +66,7 @@ export const POST = async (req: Request, res: Response): Promise<void> => {
 
   deviceStore.set(device.id, device);
   secretKeys.set(device.id, secretKey);
+  logAction('DEVICE_CONNECT', device);
 
   console.log('New Device:\n', device);
 
@@ -92,5 +94,7 @@ export const DELETE = (req: Request, res: Response): void => {
 
   deviceStore.delete(normalizedId);
   secretKeys.delete(normalizedId);
+  logAction('DEVICE_DISCONNECT', { id: normalizedId });
   res.status(200).json({ deleted: true, id: normalizedId });
+  console.log('Device with ID: ', id, ' deleted!');
 };

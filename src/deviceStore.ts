@@ -1,4 +1,4 @@
-import { Device } from './types.js';
+import { Device, LogEntry, LogKey } from './types.js';
 
 const MIN_DEVICE_ID = 10000;
 const MAX_DEVICE_ID = 99999;
@@ -6,6 +6,7 @@ const MAX_ID_ATTEMPTS = 10000;
 
 export const deviceStore = new Map<string, Device>();
 export const secretKeys = new Map<string, Uint8Array>();
+export const Logs: LogEntry[] = [];
 
 export interface NewDeviceRecord {
   mac: string;
@@ -14,6 +15,10 @@ export interface NewDeviceRecord {
 }
 
 let newDevice: NewDeviceRecord | null = null;
+
+export function logAction(key: LogKey, value: unknown): void {
+  Logs.push({ key, value });
+}
 
 /**
  * Store the latest detected device information for /admin integration.

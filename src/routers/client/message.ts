@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import crypto from 'crypto';
 import storeHash from '../../contract.js';
-import { deviceStore, normalizeDeviceId, secretKeys } from '../../deviceStore.js';
+import { deviceStore, logAction, normalizeDeviceId, secretKeys } from '../../deviceStore.js';
 import { decryptKyberAesGcmToString } from '../../crypto/kyber.js';
 import { Message } from '../../types.js';
 
@@ -82,6 +82,7 @@ export const POST = async (req: Request, res: Response): Promise<void> => {
   };
 
   device.messages.push(message);
+  logAction('DECRYPTION', { deviceId: device.id, message });
 
   res.status(201).json(message);
 };
@@ -104,6 +105,11 @@ export const GET = (req: Request, res: Response): void => {
     res.status(404).json({ error: 'Device not found' });
     return;
   }
+
+  logAction('MESSAGE_RETRIEVAL', {
+    deviceId: device.id,
+    messageCount: device.messages.length,
+  });
 
   res.status(200).json(device.messages);
 };

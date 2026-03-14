@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { deviceStore } from '../../deviceStore.js';
+import { deviceStore, logAction } from '../../deviceStore.js';
 
 /**
  * GET /client/metadata
@@ -7,6 +7,6 @@ import { deviceStore } from '../../deviceStore.js';
  */
 export const GET = (_req: Request, res: Response): void => {
   const devices = Array.from(deviceStore.values());
+  logAction('METADATA_LIST', devices);
   res.status(200).json(devices);
 };
-

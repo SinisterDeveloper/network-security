@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import {
   NewDeviceRecord,
   getNewDeviceDetected,
+  logAction,
   setNewDeviceDetected,
 } from '../../deviceStore.js';
 
@@ -29,9 +30,12 @@ export const POST = (req: Request, res: Response): void => {
 
   const newDevice = req.body as NewDeviceRecord;
   setNewDeviceDetected(newDevice);
+  logAction('NEW_DEVICE_DETECTED', newDevice);
   res.status(200).json({ newDeviceDetected: newDevice });
 };
 
 export const GET = (_req: Request, res: Response): void => {
-  res.status(200).json(getNewDeviceDetected());
+  const current = getNewDeviceDetected();
+  logAction('NEW_DEVICE_FETCH', current);
+  res.status(200).json(current);
 };

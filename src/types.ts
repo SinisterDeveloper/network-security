@@ -40,3 +40,19 @@ export interface Message {
 	hash: any;
 	sender: string;
 }
+
+export type LogKey =
+	| 'DEVICE_CONNECT'
+	| 'DEVICE_DISCONNECT'
+	| 'DECRYPTION'
+	| 'ENCRYPTION'
+	| 'MESSAGE_RETRIEVAL'
+	| 'METADATA_LIST'
+	| 'ADMIN_LOGS_VIEW'
+	| 'NEW_DEVICE_DETECTED'
+	| 'NEW_DEVICE_FETCH';
+
+export interface LogEntry {
+	key: LogKey;
+	value: unknown;
+}
