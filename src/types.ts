@@ -49,7 +49,7 @@ export type LogKey =
 	| 'MESSAGE_RETRIEVAL'
 	| 'METADATA_LIST'
 	| 'NEW_DEVICE_DETECTED'
-	| 'NEW_DEVICE_FETCH';
+	;
 
 export interface LogEntry {
 	key: LogKey;

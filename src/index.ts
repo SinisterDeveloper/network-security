@@ -5,7 +5,7 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 async function bootstrap(): Promise<void> {
   const app = await createApp();
-  app.listen(PORT, () => {
+  app.listen(PORT, '0.0.0.0', () => {
     console.log(`[server] Listening on http://localhost:${PORT}`);
   });
 }

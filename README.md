@@ -135,6 +135,82 @@ HTTP/1.1 200 OK
 
 ---
 
+#### POST /admin/new
+
+Registers the next “new device detected” payload so other components can react before the device is formally persisted. The payload must match the `NewDeviceRecord` shape stored in the log tracking system.
+
+**Request Body**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `mac` | `string` | Yes | Device MAC address |
+| `puf` | `string` | Yes | PUF identifier |
+| `firmwareHash` | `string` | Yes | Firmware hash |
+
+**Responses**
+
+| Status | Description |
+|---|---|
+| `200 OK` | Returns `{ "newDeviceDetected": NewDeviceRecord }` when the payload is accepted |
+| `400 Bad Request` | Missing/invalid fields |
+
+**Example Request**
+
+```json
+POST /admin/new
+Content-Type: application/json
+
+{
+  "mac": "AA:BB:CC:DD:EE:FF",
+  "puf": "puf-identifier",
+  "firmwareHash": "deadbeef..."
+}
+```
+
+**Example Response**
+
+```json
+HTTP/1.1 200 OK
+
+{
+  "newDeviceDetected": {
+    "mac": "AA:BB:CC:DD:EE:FF",
+    "puf": "puf-identifier",
+    "firmwareHash": "deadbeef..."
+  }
+}
+```
+
+#### GET /admin/new
+
+Returns the last registered `newDeviceDetected` payload so callers can inspect it before acting; if no payload has been set, the response is `null`.
+
+**Responses**
+
+| Status | Description |
+|---|---|
+| `200 OK` | Returns the current `newDeviceDetected` value (or `null`) |
+
+**Example Request**
+
+```
+GET /admin/new
+```
+
+**Example Response**
+
+```json
+HTTP/1.1 200 OK
+
+{
+  "mac": "AA:BB:CC:DD:EE:FF",
+  "puf": "puf-identifier",
+  "firmwareHash": "deadbeef..."
+}
+```
+
+---
+
 #### POST /client/message
 
 Sends an encrypted message to a registered device. The server decrypts the payload using the device's ML-KEM-768 secret key and AES-256-GCM, then stores a SHA-256 hash of the message on the Polygon Amoy blockchain for an immutable audit trail.
