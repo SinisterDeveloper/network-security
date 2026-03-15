@@ -1,7 +1,7 @@
-import { MlKem768 } from 'crystals-kyber-js';
+import { MlKem512 } from 'crystals-kyber-js';
 import { createDecipheriv, createHash } from 'crypto';
 
-const kyberInstance = new MlKem768();
+const kyberInstance = new MlKem512();
 
 function toBase64(data: Uint8Array): string {
   return Buffer.from(data).toString('base64');
@@ -42,7 +42,25 @@ export async function decryptKyberAesGcmToString(options: {
     options;
 
   const sharedSecret = await decapKyberCiphertext(kyberCiphertextBase64, secretKey);
+  console.log("[DEBUG] secretKey length:", secretKey.length);
+  console.log(
+    "[DEBUG] secretKey (first 20 bytes hex):",
+    Buffer.from(secretKey).slice(0, 20).toString("hex"),
+  );
   const aesKey = deriveAes256Key(sharedSecret);
+
+  console.log(
+    "[DEBUG] sharedSecret (hex):",
+    Buffer.from(sharedSecret).toString("hex"),
+  );
+  console.log(
+    "[DEBUG] aesKey (hex)      :",
+    Buffer.from(aesKey).toString("hex"),
+  );
+  console.log(
+    "[DEBUG] iv (hex)          :",
+    Buffer.from(ivBase64, "base64").toString("hex"),
+  );
 
   const iv = Buffer.from(ivBase64, 'base64');
   if (iv.length !== 12) {
@@ -56,6 +74,9 @@ export async function decryptKyberAesGcmToString(options: {
 
   const tag = payload.subarray(payload.length - 16);
   const ciphertext = payload.subarray(0, payload.length - 16);
+
+  console.log("[DEBUG] ciphertext (hex)  :", ciphertext.toString("hex"));
+  console.log("[DEBUG] tag (hex)         :", tag.toString("hex"));
 
   const decipher = createDecipheriv('aes-256-gcm', aesKey, iv);
   decipher.setAuthTag(tag);

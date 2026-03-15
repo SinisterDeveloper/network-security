@@ -69,6 +69,7 @@ export const POST = async (req: Request, res: Response): Promise<void> => {
       secretKey,
     });
   } catch (error) {
+    console.log(error);
     res.status(400).json({ error: 'Unable to decrypt payload' });
     return;
   }

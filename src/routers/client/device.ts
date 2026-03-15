@@ -53,6 +53,15 @@ export const POST = async (req: Request, res: Response): Promise<void> => {
 
   const { publicKey, secretKey } = await generateKyberKeyPair();
 
+  console.log(
+    "[DEBUG] Generated secretKey (first 20 bytes hex):",
+    Buffer.from(secretKey).slice(0, 20).toString("hex"),
+  );
+  console.log(
+    "[DEBUG] Generated publicKey (first 40 chars):",
+    publicKey.slice(0, 40),
+  );
+
   const device: Device = {
     id: id,
     name: name,
