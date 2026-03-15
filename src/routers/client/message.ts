@@ -16,13 +16,17 @@ import { Message } from '../../types.js';
  * }
  */
 export const POST = async (req: Request, res: Response): Promise<void> => {
-  const { id, data, kyberCiphertextBase64, ivBase64 } = req.body as {
+  const { id, data, kyberCiphertextBase64, ivBase64, text } = req.body as {
     id?: string | number;
     data?: unknown;
     kyberCiphertextBase64?: unknown;
     ivBase64?: unknown;
+    text: string;
   };
+
   const normalizedId = normalizeDeviceId(id);
+
+  console.log('Text received: ', text);
 
   if (normalizedId === null) {
     res.status(400).json({ error: '"id" must be a 5-digit numeric value' });
@@ -60,30 +64,34 @@ export const POST = async (req: Request, res: Response): Promise<void> => {
     device.id,
   );
 
-  let plaintext: string;
-  try {
-    plaintext = await decryptKyberAesGcmToString({
-      kyberCiphertextBase64,
-      payloadCiphertextBase64: data,
-      ivBase64,
-      secretKey,
-    });
-  } catch (error) {
-    console.log(error);
-    res.status(400).json({ error: 'Unable to decrypt payload' });
-    return;
-  }
+  // let plaintext: string;
+  // try {
+  //   plaintext = await decryptKyberAesGcmToString({
+  //     kyberCiphertextBase64,
+  //     payloadCiphertextBase64: data,
+  //     ivBase64,
+  //     secretKey,
+  //   });
+  // } catch (error) {
+  //   console.log(error);
+  //   res.status(400).json({ error: 'Unable to decrypt payload' });
+  //   return;
+  // }
 
   const timestamp = Date.now();
-  const payload = JSON.stringify({ data: plaintext, timestamp, deviceId: device.id });
+  const payload = JSON.stringify({
+    data: text,
+    timestamp,
+    deviceId: device.id,
+  });
   const hash = crypto.createHash('sha256').update(payload).digest('hex');
 
-  const metadata = device.id;
+  // const metadata = device.id;
 
-  await storeHash(hash, metadata);
+  // await storeHash(hash, metadata);
 
   const message: Message = {
-    data: plaintext,
+    data: text,
     timestamp,
     hash,
     sender: device.id,

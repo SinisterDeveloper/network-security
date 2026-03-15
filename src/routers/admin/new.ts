@@ -20,7 +20,6 @@ function isNewDevicePayload(value: unknown): value is NewDeviceRecord {
 }
 
 export const POST = (req: Request, res: Response): void => {
-  console.log('New device req reached');
   if (!isNewDevicePayload(req.body)) {
     res.status(400).json({
       error:
@@ -28,7 +27,6 @@ export const POST = (req: Request, res: Response): void => {
     });
     return;
   }
-  console.log("New device req almost there");
 
   const newDevice = req.body as NewDeviceRecord;
   setNewDeviceDetected(newDevice);

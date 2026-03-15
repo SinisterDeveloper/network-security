@@ -343,9 +343,50 @@ HTTP/1.1 200 OK
 ]
 ```
 
----
+  ---
 
-### Admin Endpoints
+#### POST /client/publicKey
+
+Returns the previously stored ML-KEM-768 public key for a registered device so clients can encrypt telemetry before sending it to `/client/message`.
+
+**Request Body**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `mac` | `string` | Yes | Device MAC address |
+
+**Responses**
+
+| Status | Description |
+|---|---|
+| `200 OK` | Returns `{ "publicKey": "<base64 ML-KEM-768 key>" }` |
+| `400 Bad Request` | `mac` is missing or not a string |
+| `404 Not Found` | Device with the provided `mac` does not exist |
+
+**Example Request**
+
+```json
+POST /client/publicKey
+Content-Type: application/json
+
+{
+  "mac": "AA:BB:CC:DD:EE:FF"
+}
+```
+
+**Example Response**
+
+```json
+HTTP/1.1 200 OK
+
+{
+  "publicKey": "<base64-encoded ML-KEM-768 public key>"
+}
+```
+
+  ---
+
+  ### Admin Endpoints
 
 #### GET /admin/logs
 
