@@ -26,7 +26,6 @@ export const POST = async (req: Request, res: Response): Promise<void> => {
 
   const normalizedId = normalizeDeviceId(id);
 
-  console.log('Text received: ', text);
 
   if (normalizedId === null) {
     res.status(400).json({ error: '"id" must be a 5-digit numeric value' });
@@ -86,9 +85,9 @@ export const POST = async (req: Request, res: Response): Promise<void> => {
   });
   const hash = crypto.createHash('sha256').update(payload).digest('hex');
 
-  // const metadata = device.id;
+  const metadata = device.id;
 
-  // await storeHash(hash, metadata);
+  await storeHash(hash, metadata);
 
   const message: Message = {
     data: text,
