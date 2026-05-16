@@ -2,7 +2,6 @@ import { Request, Response } from 'express';
 import crypto from 'crypto';
 import storeHash from '../../contract.js';
 import { deviceStore, logAction, normalizeDeviceId, secretKeys } from '../../deviceStore.js';
-import { decryptKyberAesGcmToString } from '../../crypto/kyber.js';
 import { Message } from '../../types.js';
 
 /**
@@ -16,12 +15,11 @@ import { Message } from '../../types.js';
  * }
  */
 export const POST = async (req: Request, res: Response): Promise<void> => {
-  const { id, data, kyberCiphertextBase64, ivBase64, text } = req.body as {
+  const { id, data, kyberCiphertextBase64, ivBase64 } = req.body as {
     id?: string | number;
     data?: unknown;
     kyberCiphertextBase64?: unknown;
     ivBase64?: unknown;
-    text: string;
   };
 
   const normalizedId = normalizeDeviceId(id);
@@ -51,8 +49,7 @@ export const POST = async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  const secretKey = secretKeys.get(device.id);
-  if (!secretKey) {
+  if (!secretKeys.has(device.id)) {
     res.status(500).json({ error: 'Device secret key not found' });
     return;
   }
@@ -63,23 +60,9 @@ export const POST = async (req: Request, res: Response): Promise<void> => {
     device.id,
   );
 
-  // let plaintext: string;
-  // try {
-  //   plaintext = await decryptKyberAesGcmToString({
-  //     kyberCiphertextBase64,
-  //     payloadCiphertextBase64: data,
-  //     ivBase64,
-  //     secretKey,
-  //   });
-  // } catch (error) {
-  //   console.log(error);
-  //   res.status(400).json({ error: 'Unable to decrypt payload' });
-  //   return;
-  // }
-
   const timestamp = Date.now();
   const payload = JSON.stringify({
-    data: text,
+    data,
     timestamp,
     deviceId: device.id,
   });
@@ -90,7 +73,7 @@ export const POST = async (req: Request, res: Response): Promise<void> => {
   await storeHash(hash, metadata);
 
   const message: Message = {
-    data: text,
+    data,
     timestamp,
     hash,
     sender: device.id,
