@@ -9,6 +9,25 @@ This project is a secure server implementation for embedded systems, integrating
 - `gateway/`: A lightweight gateway for device management and traffic filtering.
 - `esp/`: Firmware code for ESP32 devices.
 
+## Environment Configuration
+
+This monorepo uses a **single `.env` file** at the root of the project to manage configuration for all packages (`server`, `blockchain`, `gateway`).
+
+1. Copy the example file:
+   ```bash
+   cp .env.example .env
+   ```
+2. Fill in the values in `.env`.
+
+### Variables
+
+- `SERVER_PORT`: Port for the main backend server (default: 3000).
+- `GATEWAY_PORT`: Port for the gateway server (default: 8824).
+- `FORWARD_BASE`: The URL where the gateway forwards requests (usually your server URL).
+- `AMOY_RPC_URL`: Polygon Amoy testnet RPC URL.
+- `PRIVATE_KEY`: Private key for blockchain transactions.
+- `CONTRACT_ADDRESS`: Address of the deployed `HashStorage` contract.
+
 ## Getting Started
 
 ### Prerequisites

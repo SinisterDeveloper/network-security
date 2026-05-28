@@ -1,7 +1,10 @@
 import { ethers } from "ethers";
 import dotenv from "dotenv";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 
-dotenv.config();
+const __dirname = dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: join(__dirname, "../.env") });
 
 const provider = new ethers.JsonRpcProvider(
   process.env.AMOY_RPC_URL || "https://rpc-amoy.polygon.technology",

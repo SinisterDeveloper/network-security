@@ -1,7 +1,12 @@
-import "dotenv/config";
+import { config } from "dotenv";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 import { createApp } from "./server.js";
 
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const __dirname = dirname(fileURLToPath(import.meta.url));
+config({ path: join(__dirname, "../../../.env") });
+
+const PORT = process.env.SERVER_PORT ? parseInt(process.env.SERVER_PORT, 10) : (process.env.PORT ? parseInt(process.env.PORT, 10) : 3000);
 
 async function bootstrap(): Promise<void> {
   const app = await createApp();

@@ -1,12 +1,15 @@
 'use strict';
 
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
+
 const express = require('express');
 const os = require('os');
 
 const app = express();
 
-const PORT = Number(process.env.PORT) || 8824;
-const FORWARD_BASE = process.env.FORWARD_BASE || 'http://172.25.83.216:6767';
+const PORT = Number(process.env.GATEWAY_PORT) || Number(process.env.PORT) || 8824;
+const FORWARD_BASE = process.env.FORWARD_BASE || 'http://localhost:3000';
 const BLOCK_THRESHOLD_BITS = 700;
 const NEW_DEVICE_PENALTY = 50;
 
