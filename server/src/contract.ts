@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import contractArtifact from "../artifacts/contracts/HashStorage.sol/HashStorage.json" with { type: "json" };
+import contractArtifact from "../../blockchain/artifacts/contracts/HashStorage.sol/HashStorage.json" with { type: "json" };
 
 const provider = new ethers.JsonRpcProvider(process.env.AMOY_RPC_URL);
 

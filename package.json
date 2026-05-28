@@ -1,41 +1,14 @@
 {
-  "name": "embsecserver",
-  "version": "1.0.0",
-  "description": "",
-  "main": "dist/index.js",
+  "name": "embsec-monorepo",
+  "private": true,
+  "workspaces": [
+    "server",
+    "blockchain",
+    "gateway"
+  ],
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "nodemon --watch src --ext ts --exec ts-node src/index.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/SinisterDeveloper/EmbSecServer.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "module",
-  "bugs": {
-    "url": "https://github.com/SinisterDeveloper/EmbSecServer/issues"
-  },
-  "homepage": "https://github.com/SinisterDeveloper/EmbSecServer#readme",
-  "dependencies": {
-    "cors": "^2.8.6",
-    "crystals-kyber-js": "^2.7.0",
-    "dotenv": "^17.3.1",
-    "ethers": "^6.16.0",
-    "express": "^5.2.1",
-    "hardhat": "^3.1.12"
-  },
-  "devDependencies": {
-    "@nomicfoundation/hardhat-ethers": "^4.0.6",
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6",
-    "@types/node": "^22.19.15",
-    "nodemon": "^3.1.14",
-    "ts-node": "^10.9.2",
-    "typescript": "~5.8.0"
+    "server:dev": "npm run dev -w server",
+    "blockchain:deploy": "npm run deploy -w blockchain",
+    "gateway:start": "npm run start -w gateway"
   }
 }

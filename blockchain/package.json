@@ -1,5 +1,12 @@
 {
+  "name": "@embsec/blockchain",
+  "version": "1.0.0",
   "type": "module",
+  "scripts": {
+    "compile": "hardhat compile",
+    "deploy": "hardhat run scripts/deploy.js",
+    "test": "hardhat test"
+  },
   "dependencies": {
     "@nomicfoundation/hardhat-ethers": "^4.0.6",
     "dotenv": "^17.3.1",
