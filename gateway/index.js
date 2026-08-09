@@ -1,6 +1,8 @@
 'use strict';
 
 const path = require('path');
+const fs = require('fs');
+const crypto = require('crypto');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const express = require('express');
@@ -10,8 +12,12 @@ const app = express();
 
 const PORT = Number(process.env.GATEWAY_PORT) || Number(process.env.PORT) || 8824;
 const FORWARD_BASE = process.env.FORWARD_BASE || 'http://localhost:3000';
-const BLOCK_THRESHOLD_BITS = 700;
-const NEW_DEVICE_PENALTY = 50;
+const BLOCK_THRESHOLD_BITS = Number(process.env.BLOCK_THRESHOLD_BITS) || 350;
+const NEW_DEVICE_PENALTY = Number(process.env.NEW_DEVICE_PENALTY) || 50;
+const FETCH_TIMEOUT_MS = Number(process.env.GATEWAY_FETCH_TIMEOUT_MS) || 5000;
+const EXPECTED_SRAM_BYTES = 512;
+const EXPECTED_SRAM_HEX_LEN = EXPECTED_SRAM_BYTES * 2;
+const STATE_FILE = path.join(__dirname, 'data.json');
 
 app.use(express.json());
 
@@ -20,21 +26,47 @@ let blockedDevices = [];
 
 const nowIso = () => new Date().toISOString();
 
+function saveState() {
+  try {
+    fs.writeFileSync(STATE_FILE, JSON.stringify({ devices, blockedDevices }, null, 2));
+  } catch (err) {
+    console.error('Failed to save gateway state:', err.message);
+  }
+}
+
 async function loadState() {
+  try {
+    if (fs.existsSync(STATE_FILE)) {
+      const raw = fs.readFileSync(STATE_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      devices = Array.isArray(parsed.devices) ? parsed.devices : [];
+      blockedDevices = Array.isArray(parsed.blockedDevices) ? parsed.blockedDevices : [];
+      console.log(`State loaded from ${STATE_FILE}: ${devices.length} devices, ${blockedDevices.length} blocked`);
+      return;
+    }
+  } catch (err) {
+    console.error('Failed to load gateway state:', err.message);
+  }
   devices = [];
   blockedDevices = [];
-  console.log('State initialized in memory only (no files).');
+  console.log('State initialized (no prior file).');
 }
 
 function parseSramHex(hexString) {
   if (!hexString || typeof hexString !== 'string') return null;
   const cleaned = hexString.replace(/[^0-9A-Fa-f]/g, '');
-  if (cleaned.length < 2 || cleaned.length % 2 !== 0) return null;
+  // Enforce exact expected length to prevent truncation attack (2-char payload would otherwise always match)
+  if (cleaned.length !== EXPECTED_SRAM_HEX_LEN) return null;
+  if (cleaned.length % 2 !== 0) return null;
   return Buffer.from(cleaned, 'hex');
 }
 
 function verifySram(storedBytes, newBytes) {
-  const len = Math.min(storedBytes.length, newBytes.length);
+  if (!storedBytes || !newBytes) return { isSame: false, flippedBits: Infinity, totalBits: 0, message: 'Invalid SRAM' };
+  if (storedBytes.length !== newBytes.length) {
+    return { isSame: false, flippedBits: Infinity, totalBits: Math.max(storedBytes.length, newBytes.length) * 8, message: `Length mismatch (${storedBytes.length} vs ${newBytes.length} bytes)` };
+  }
+  const len = storedBytes.length;
   let flippedBits = 0;
 
   for (let i = 0; i < len; i += 1) {
@@ -65,6 +97,7 @@ function isDeviceBlocked(sramHex) {
     if (result.isSame) {
       blocked.lastAttempt = nowIso();
       blocked.attemptCount = (blocked.attemptCount || 0) + 1;
+      saveState();
       return { isBlocked: true, blockedEntry: blocked, pufResult: result };
     }
   }
@@ -82,8 +115,9 @@ function matchKnownDevice(mac, sramHex) {
 
     if (result.isSame) {
       device.lastSeen = nowIso();
-      device.mac = mac;
+      device.lastSeenMac = mac;
       device.lastFlippedBits = result.flippedBits;
+      saveState();
       return {
         found: true,
         deviceObj: device,
@@ -98,20 +132,27 @@ function matchKnownDevice(mac, sramHex) {
   return { found: false };
 }
 
-function registerDevice(mac, sramHex) {
+function registerDevice(mac, sramHex, firmwareHash) {
   const deviceNumber = devices.length + 1;
   const deviceName = `Device ${deviceNumber}`;
+  // Derive a deterministic placeholder hash from SRAM if caller didn't supply one; avoid poisoning with "Device N"
+  const resolvedFirmwareHash = (typeof firmwareHash === 'string' && /^[a-fA-F0-9]{64}$/.test(firmwareHash))
+    ? firmwareHash
+    : crypto.createHash('sha256').update(sramHex).digest('hex');
   const newDevice = {
     name: deviceName,
     mac,
     sram: sramHex,
+    firmwareHash: resolvedFirmwareHash,
     registeredAt: nowIso(),
     lastSeen: nowIso(),
+    lastSeenMac: mac,
     lastFlippedBits: 0,
     blockCountdown: NEW_DEVICE_PENALTY,
     whitelisted: false,
   };
   devices.push(newDevice);
+  saveState();
   return newDevice;
 }
 
@@ -134,6 +175,18 @@ function ensureFetchAvailable() {
   }
 }
 
+async function fetchWithTimeout(url, options = {}) {
+  ensureFetchAvailable();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    return res;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 app.get('/', (_, res) => {
   res.json({
     status: 'active',
@@ -141,17 +194,54 @@ app.get('/', (_, res) => {
     registeredDevices: devices.map((d) => ({
       name: d.name,
       mac: d.mac,
+      lastSeenMac: d.lastSeenMac,
       registeredAt: d.registeredAt,
       lastSeen: d.lastSeen,
       lastFlippedBits: d.lastFlippedBits,
+      id: d.id || null,
+      firmwareHash: d.firmwareHash,
     })),
     blockedDevices: blockedDevices.map((b) => ({
       mac: b.mac,
+      sram: b.sram ? b.sram.slice(0, 16) + '...' : undefined,
       blockedAt: b.blockedAt,
       lastAttempt: b.lastAttempt,
       attemptCount: b.attemptCount,
     })),
   });
+});
+
+// Shim for ESP encrypt: proxy to server's /client/encrypt so ESP hard-coded :3001/encrypt works if gateway runs on 3001 or via this route
+app.post('/encrypt', async (req, res) => {
+  try {
+    const response = await fetchWithTimeout(`${FORWARD_BASE}/client/encrypt`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body),
+    });
+    const text = await response.text();
+    res.status(response.status).type('application/json').send(text);
+  } catch (err) {
+    res.status(502).json({ error: 'Encrypt proxy failed', message: err.message });
+  }
+});
+
+// Operator: permanently block a device by SRAM (adds to blockedDevices)
+app.post('/admin/block', (req, res) => {
+  const { sram, mac } = req.body || {};
+  if (!sram || typeof sram !== 'string' || !parseSramHex(sram)) {
+    return res.status(400).json({ error: 'Valid sram hex (1024 chars) required' });
+  }
+  const entry = {
+    sram,
+    mac: mac || 'unknown',
+    blockedAt: nowIso(),
+    lastAttempt: nowIso(),
+    attemptCount: 0,
+  };
+  blockedDevices.push(entry);
+  saveState();
+  res.status(201).json({ blocked: true, entry: { mac: entry.mac, blockedAt: entry.blockedAt } });
 });
 
 app.post('/data', async (req, res) => {
@@ -160,6 +250,7 @@ app.post('/data', async (req, res) => {
 
   const mac = req.headers['x-mac-address'] || 'unknown';
   const sramHex = req.headers['x-sram-data'] || '';
+  const firmwareHashHeader = req.headers['x-firmware-hash'];
 
   console.log('MAC Address:', mac);
   console.log('SRAM Data Length:', sramHex.length, 'hex chars');
@@ -176,11 +267,11 @@ app.post('/data', async (req, res) => {
   }
 
   if (!parseSramHex(sramHex)) {
-    console.log('INVALID SRAM HEX - blocking request');
+    console.log(`INVALID SRAM HEX - expected ${EXPECTED_SRAM_HEX_LEN} hex chars (512 bytes). Got ${sramHex.replace(/[^0-9A-Fa-f]/g,'').length}`);
     console.log('--------------------------------------------------');
     return res.status(400).json({
       status: 'error',
-      message: 'Invalid SRAM hex payload.',
+      message: `Invalid SRAM hex payload. Expected ${EXPECTED_SRAM_HEX_LEN} hex chars (512 bytes).`,
       mac,
     });
   }
@@ -201,10 +292,10 @@ app.post('/data', async (req, res) => {
   const match = matchKnownDevice(mac, sramHex);
   if (match.found) {
     const device = match.deviceObj;
-    let isVerifiedOnServer2 = Boolean(device.id);
 
     if (device.blockCountdown && device.blockCountdown > 0) {
       device.blockCountdown -= 1;
+      saveState();
       console.log(`BLOCKED: ${match.deviceName} is serving a penalty for missing metadata.`);
       console.log(`Calls remaining in penalty: ${device.blockCountdown}`);
       console.log('--------------------------------------------------');
@@ -216,10 +307,9 @@ app.post('/data', async (req, res) => {
     }
 
     try {
-      ensureFetchAvailable();
       const metaUrl = `${FORWARD_BASE}/client/metadata`;
       console.log(`Verifying ${match.deviceName} against ${metaUrl}...`);
-      const metaRes = await fetch(metaUrl);
+      const metaRes = await fetchWithTimeout(metaUrl);
 
       if (metaRes.ok) {
         const rawText = await metaRes.text();
@@ -230,6 +320,7 @@ app.post('/data', async (req, res) => {
           metadata = JSON.parse(rawText);
         } catch (err) {
           console.error('Failed to parse metadata JSON:', err.message);
+          return res.status(502).json({ status: 'error', message: 'Invalid metadata response from server', mac });
         }
 
         const deviceInMeta = Array.isArray(metadata)
@@ -237,13 +328,14 @@ app.post('/data', async (req, res) => {
           : null;
 
         if (deviceInMeta) {
-          isVerifiedOnServer2 = true;
           device.id = deviceInMeta.id;
+          saveState();
           console.log(
             `VERIFIED: Device found in Server 2 metadata (ID: ${deviceInMeta.id || 'N/A'})`,
           );
         } else {
           device.blockCountdown = NEW_DEVICE_PENALTY;
+          saveState();
           console.log(
             `BLOCKED: ${match.deviceName} missing from Server 2 metadata. Starting ${NEW_DEVICE_PENALTY}-call penalty.`,
           );
@@ -256,63 +348,59 @@ app.post('/data', async (req, res) => {
           });
         }
       } else {
-        console.warn(
-          `Warning: Server 2 metadata check failed (HTTP ${metaRes.status}). Forwarding anyway...`,
-        );
-        isVerifiedOnServer2 = Boolean(device.id);
+        console.warn(`Metadata check failed (HTTP ${metaRes.status}) - fail-closed.`);
+        return res.status(502).json({ status: 'error', message: 'Metadata verification failed', mac });
       }
     } catch (err) {
-      console.error(
-        `Warning: Failed to fetch metadata from target server. Forwarding anyway... (${err.message})`,
-      );
-      isVerifiedOnServer2 = Boolean(device.id);
+      const isTimeout = err.name === 'AbortError';
+      console.error(`Metadata fetch failed (${isTimeout ? 'timeout' : err.message}) - fail-closed.`);
+      return res.status(502).json({ status: 'error', message: `Metadata verification failed: ${err.message}`, mac });
     }
 
-    if (isVerifiedOnServer2) {
-      if (!device.id) {
-        console.log('BLOCKED: Device is missing server id; cannot forward message.');
-        console.log('--------------------------------------------------');
-        return res.status(403).json({
-          status: 'blocked',
-          message: 'Device is missing server id; cannot forward message.',
-          mac,
-        });
-      }
-      const deviceInfo = {
-        deviceName: match.deviceName,
-        id: device.id,
-        flippedBits: match.flippedBits,
-        totalBits: match.totalBits,
-        matchDetails: match.matchDetails,
-      };
-
-      console.log(
-        `KNOWN DEVICE: ${match.deviceName} (ID: ${device.id || 'Unknown'})`,
-      );
-      console.log(`Flipped Bits: ${match.flippedBits} / ${match.totalBits}`);
-      console.log(`Result: ${match.matchDetails}`);
-      return forwardRequest(req, res, deviceInfo);
+    if (!device.id) {
+      console.log('BLOCKED: Device is missing server id; cannot forward message.');
+      console.log('--------------------------------------------------');
+      return res.status(403).json({
+        status: 'blocked',
+        message: 'Device is missing server id; cannot forward message.',
+        mac,
+      });
     }
+    const deviceInfo = {
+      deviceName: match.deviceName,
+      id: device.id,
+      flippedBits: match.flippedBits,
+      totalBits: match.totalBits,
+      matchDetails: match.matchDetails,
+    };
+
+    console.log(
+      `KNOWN DEVICE: ${match.deviceName} (ID: ${device.id || 'Unknown'})`,
+    );
+    console.log(`Flipped Bits: ${match.flippedBits} / ${match.totalBits}`);
+    console.log(`Result: ${match.matchDetails}`);
+    return forwardRequest(req, res, deviceInfo);
   }
 
   console.log('NEW UNKNOWN DEVICE DETECTED');
   console.log(`MAC: ${mac}`);
   console.log('Automatically registering and notifying admin...');
 
-  const newDevice = registerDevice(mac, sramHex);
+  const bodyFirmwareHash = req.body && typeof req.body.firmwareHash === 'string' ? req.body.firmwareHash : undefined;
+  const resolvedFirmwareHash = bodyFirmwareHash || (typeof firmwareHashHeader === 'string' ? firmwareHashHeader : undefined);
+  const newDevice = registerDevice(mac, sramHex, resolvedFirmwareHash);
   console.log(`REGISTERED as ${newDevice.name}`);
 
   try {
-    ensureFetchAvailable();
     const adminUrl = `${FORWARD_BASE}/admin/new`;
     console.log(`Sending device registry info to ${adminUrl}...`);
-    const response = await fetch(adminUrl, {
+    const response = await fetchWithTimeout(adminUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         puf: sramHex,
         mac,
-        firmwareHash: newDevice.name,
+        firmwareHash: newDevice.firmwareHash,
       }),
     });
 
@@ -323,14 +411,18 @@ app.post('/data', async (req, res) => {
     if (response.ok) {
       try {
         const payload = JSON.parse(resText);
+        // Server returns { newDeviceDetected: {mac,puf,firmwareHash} } - no id; device.id stays pending until metadata verifies
+        if (payload && payload.newDeviceDetected) {
+          console.log('Admin notified of new device.');
+        }
         if (payload && payload.id) {
           newDevice.id = payload.id;
+          saveState();
           console.log(`Stored id for ${newDevice.name}: ${payload.id}`);
         }
       } catch (err) {
         console.warn('Admin response was not valid JSON; id not stored.');
       }
-      console.log('Device registry info sent to admin endpoint.');
     } else {
       console.log(`Admin endpoint returned HTTP ${response.status}`);
     }
@@ -345,14 +437,13 @@ app.post('/data', async (req, res) => {
   return res.status(403).json({
     status: 'pending_approval',
     message:
-      'Device registered. Pending admin approval. Data blocked for the next 50 calls to allow verification.',
+      `Device registered. Pending admin approval. Data blocked for the next ${NEW_DEVICE_PENALTY} calls to allow verification.`,
     mac,
   });
 });
 
 async function forwardRequest(req, res, deviceInfo) {
   try {
-    ensureFetchAvailable();
     const forwardBody = {
       id: deviceInfo.id,
       data: req.body.data ?? req.body.payloadCiphertextBase64,
@@ -370,8 +461,7 @@ async function forwardRequest(req, res, deviceInfo) {
     const messageUrl = `${FORWARD_BASE}/client/message`;
 
     console.log('Forwarding to:', messageUrl);
-    console.log('Payload being sent:', JSON.stringify(forwardBody, null, 2));
-    const response = await fetch(messageUrl, {
+    const response = await fetchWithTimeout(messageUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -389,14 +479,13 @@ async function forwardRequest(req, res, deviceInfo) {
     return res.send(responseText);
   } catch (error) {
     console.error('Forwarding Failed:', error.message);
-    res.status(502).json({
+    return res.status(502).json({
       status: 'error',
       device: deviceInfo.deviceName,
       message: 'Failed to forward data',
       error: error.message,
     });
   }
-  console.log('--------------------------------------------------');
 }
 
 loadState().then(() => {
@@ -406,6 +495,7 @@ loadState().then(() => {
     console.log('Local Network Access:');
     ips.forEach((ip) => console.log(`  http://${ip}:${PORT}`));
     console.log(`Forwarding Target Base: ${FORWARD_BASE}`);
+    console.log(`BLOCK_THRESHOLD_BITS: ${BLOCK_THRESHOLD_BITS} (expected SRAM ${EXPECTED_SRAM_BYTES}B)`);
     console.log(`Registered Devices: ${devices.length}`);
     devices.forEach((d) => console.log(`  OK ${d.name} (MAC: ${d.mac})`));
     console.log(`Blocked Devices: ${blockedDevices.length}`);
@@ -415,3 +505,5 @@ loadState().then(() => {
     console.log('');
   });
 });
+
+module.exports = { app, parseSramHex, verifySram, devices, blockedDevices };

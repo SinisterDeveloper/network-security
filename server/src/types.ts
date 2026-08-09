@@ -49,6 +49,9 @@ export type LogKey =
 	| 'MESSAGE_RETRIEVAL'
 	| 'METADATA_LIST'
 	| 'NEW_DEVICE_DETECTED'
+	| 'HASH_STORED'
+	| 'HASH_STORE_FAILED'
+	| 'HASH_RETRY'
 	;
 
 export interface LogEntry {

@@ -8,6 +8,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let cachedContract: ethers.Contract | null = null;
 let artifactAbi: ethers.InterfaceAbi | null = null;
 
+export interface PendingHash {
+  hash: string;
+  metadata: string;
+  timestamp: number;
+  attempts: number;
+}
+
+export const pendingHashes: PendingHash[] = [];
+
 function getEnv(name: string, fallback?: string): string | undefined {
   return process.env[name] ?? fallback;
 }
@@ -55,7 +64,37 @@ export default async function storeHash(hash: string, metadata: string) {
   return tx.hash;
 }
 
+export async function storeHashWithRetry(hash: string, metadata: string): Promise<string> {
+  try {
+    return await storeHash(hash, metadata);
+  } catch (err) {
+    pendingHashes.push({ hash, metadata, timestamp: Date.now(), attempts: 1 });
+    throw err;
+  }
+}
+
+export async function retryPendingHashes(maxAttempts = 3): Promise<number> {
+  let succeeded = 0;
+  const remaining: PendingHash[] = [];
+  for (const entry of pendingHashes) {
+    try {
+      await storeHash(entry.hash, entry.metadata);
+      succeeded += 1;
+    } catch {
+      entry.attempts += 1;
+      if (entry.attempts < maxAttempts) remaining.push(entry);
+    }
+  }
+  pendingHashes.length = 0;
+  pendingHashes.push(...remaining);
+  return succeeded;
+}
+
 // For testing: allow injecting mock
 export function __setMockContract(mock: ethers.Contract | null) {
   cachedContract = mock;
+}
+
+export function __clearPendingHashes() {
+  pendingHashes.length = 0;
 }

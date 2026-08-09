@@ -2,7 +2,11 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 const mockStoreHash = vi.fn(async () => '0xmockhash');
 vi.mock('../contract.js', () => ({
   default: mockStoreHash,
+  pendingHashes: [],
   __setMockContract: vi.fn(),
+  __clearPendingHashes: vi.fn(),
+  storeHashWithRetry: vi.fn(async () => '0xmockhash'),
+  retryPendingHashes: vi.fn(async () => 0),
 }));
 
 import request from 'supertest';

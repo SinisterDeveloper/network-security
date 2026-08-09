@@ -12,6 +12,8 @@ contract HashStorage {
 
     Record[] public records;
 
+    event HashStored(address indexed sender, uint256 indexed timestamp, string hash, string metadata, uint256 index);
+
     function storeHash(string calldata hash, string calldata metadata) public {
         records.push(
             Record({
@@ -21,6 +23,11 @@ contract HashStorage {
                 metadata: metadata
             })
         );
+        emit HashStored(msg.sender, block.timestamp, hash, metadata, records.length - 1);
+    }
+
+    function getRecordCount() public view returns (uint256) {
+        return records.length;
     }
 
     function getRecord(uint index) public view returns (Record memory) {

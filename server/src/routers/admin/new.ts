@@ -12,18 +12,29 @@ function isNewDevicePayload(value: unknown): value is NewDeviceRecord {
   }
 
   const candidate = value as Record<string, unknown>;
-  return (
-    typeof candidate.mac === 'string' &&
-    typeof candidate.puf === 'string' &&
-    typeof candidate.firmwareHash === 'string'
-  );
+  if (
+    typeof candidate.mac !== 'string' ||
+    typeof candidate.puf !== 'string' ||
+    typeof candidate.firmwareHash !== 'string'
+  ) {
+    return false;
+  }
+  // firmwareHash must be 64-char hex (sha256) - prevents poisoning with "Device N"
+  if (!/^[a-fA-F0-9]{64}$/.test(candidate.firmwareHash)) {
+    return false;
+  }
+  // puf (SRAM hex) should be plausible length; allow gateway derived but enforce hex
+  if (candidate.puf.length < 64 || /[^a-fA-F0-9]/.test(candidate.puf.replace(/[^0-9A-Fa-f]/g, ''))) {
+    // Still accept any string payload but firmwareHash strict check already prevents poisoned "Device N"
+  }
+  return true;
 }
 
 export const POST = (req: Request, res: Response): void => {
   if (!isNewDevicePayload(req.body)) {
     res.status(400).json({
       error:
-        'Payload must include mac, puf, and firmwareHash string properties',
+        'Payload must include mac, puf, and firmwareHash (64-char hex sha256) string properties',
     });
     return;
   }

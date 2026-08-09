@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import crypto from 'crypto';
-import storeHash from '../../contract.js';
+import storeHash, { pendingHashes } from '../../contract.js';
 import { deviceStore, logAction, normalizeDeviceId, secretKeys } from '../../deviceStore.js';
 import { Message } from '../../types.js';
 import { decryptKyberAesGcmToString } from '../../crypto/kyber.js';
@@ -83,12 +83,14 @@ export const POST = async (req: Request, res: Response): Promise<void> => {
 
   const metadata = device.id;
 
+  let hashStored = true;
   try {
     await storeHash(hash, metadata);
+    logAction('HASH_STORED', { deviceId: device.id, hash, metadata }, device.id);
   } catch (err) {
-    // Blockchain failure should not lose the message; store anyway and report hash pending.
-    // Client can verify hash on-chain later; we log the failure.
-    logAction('ENCRYPTION' as unknown as never, { deviceId: device.id, hashError: err instanceof Error ? err.message : String(err) }, device.id);
+    hashStored = false;
+    pendingHashes.push({ hash, metadata, timestamp, attempts: 1 });
+    logAction('HASH_STORE_FAILED', { deviceId: device.id, hash, metadata, error: err instanceof Error ? err.message : String(err) }, device.id);
   }
 
   const message: Message = {
@@ -97,6 +99,7 @@ export const POST = async (req: Request, res: Response): Promise<void> => {
     hash,
     sender: device.id,
   };
+  (message as unknown as Record<string, unknown>).hashStored = hashStored;
 
   device.messages.push(message);
   logAction('DECRYPTION', { deviceId: device.id, message }, device.id);

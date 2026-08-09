@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { Device, LogEntry, LogKey } from './types.js';
 
 const MIN_DEVICE_ID = 10000;
@@ -41,9 +42,7 @@ export function generateUniqueDeviceId(): string {
   }
 
   for (let attempt = 0; attempt < MAX_ID_ATTEMPTS; attempt += 1) {
-    const candidate =
-      Math.floor(Math.random() * (MAX_DEVICE_ID - MIN_DEVICE_ID + 1)) +
-      MIN_DEVICE_ID;
+    const candidate = crypto.randomInt(MIN_DEVICE_ID, MAX_DEVICE_ID + 1);
     const id = candidate.toString();
     if (!deviceStore.has(id)) {
       return id;
