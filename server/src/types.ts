@@ -35,9 +35,9 @@ export interface Device {
 }
 
 export interface Message {
-	data: any;
+	data: string;
 	timestamp: number;
-	hash: any;
+	hash: string;
 	sender: string;
 }
 

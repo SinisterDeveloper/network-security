@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import storeHash from '../../contract.js';
 import { deviceStore, logAction, normalizeDeviceId, secretKeys } from '../../deviceStore.js';
 import { Message } from '../../types.js';
+import { decryptKyberAesGcmToString } from '../../crypto/kyber.js';
 
 /**
  * POST /client/message
@@ -15,12 +16,15 @@ import { Message } from '../../types.js';
  * }
  */
 export const POST = async (req: Request, res: Response): Promise<void> => {
-  const { id, data, kyberCiphertextBase64, ivBase64 } = req.body as {
+  const { id, kyberCiphertextBase64, ivBase64 } = req.body as {
     id?: string | number;
-    data?: unknown;
     kyberCiphertextBase64?: unknown;
     ivBase64?: unknown;
   };
+  // Accept both `data` (spec) and `payloadCiphertextBase64` (gateway/ESP alias)
+  const rawData = (req.body as Record<string, unknown>).data ??
+    (req.body as Record<string, unknown>).payloadCiphertextBase64;
+  const data = rawData as unknown;
 
   const normalizedId = normalizeDeviceId(id);
 
@@ -30,7 +34,7 @@ export const POST = async (req: Request, res: Response): Promise<void> => {
     return;
   }
   if (typeof data !== 'string') {
-    res.status(400).json({ error: '"data" must be a base64 string' });
+    res.status(400).json({ error: '"data" must be a base64 string (alias: payloadCiphertextBase64)' });
     return;
   }
   if (typeof kyberCiphertextBase64 !== 'string') {
@@ -49,20 +53,29 @@ export const POST = async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  if (!secretKeys.has(device.id)) {
+  const secretKey = secretKeys.get(device.id);
+  if (!secretKey) {
     res.status(500).json({ error: 'Device secret key not found' });
     return;
   }
 
-  logAction(
-    "ENCRYPTION",
-    { deviceId: device.id, data: kyberCiphertextBase64 },
-    device.id,
-  );
+  let plaintext: string;
+  try {
+    plaintext = await decryptKyberAesGcmToString({
+      kyberCiphertextBase64,
+      payloadCiphertextBase64: data,
+      ivBase64,
+      secretKey,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Decryption failed';
+    res.status(400).json({ error: `Decryption failed: ${message}` });
+    return;
+  }
 
   const timestamp = Date.now();
   const payload = JSON.stringify({
-    data,
+    data: plaintext,
     timestamp,
     deviceId: device.id,
   });
@@ -70,10 +83,16 @@ export const POST = async (req: Request, res: Response): Promise<void> => {
 
   const metadata = device.id;
 
-  await storeHash(hash, metadata);
+  try {
+    await storeHash(hash, metadata);
+  } catch (err) {
+    // Blockchain failure should not lose the message; store anyway and report hash pending.
+    // Client can verify hash on-chain later; we log the failure.
+    logAction('ENCRYPTION' as unknown as never, { deviceId: device.id, hashError: err instanceof Error ? err.message : String(err) }, device.id);
+  }
 
   const message: Message = {
-    data,
+    data: plaintext,
     timestamp,
     hash,
     sender: device.id,

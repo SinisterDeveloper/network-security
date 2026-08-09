@@ -53,15 +53,6 @@ export const POST = async (req: Request, res: Response): Promise<void> => {
 
   const { publicKey, secretKey } = await generateKyberKeyPair();
 
-  console.log(
-    "[DEBUG] Generated secretKey (first 20 bytes hex):",
-    Buffer.from(secretKey).slice(0, 20).toString("hex"),
-  );
-  console.log(
-    "[DEBUG] Generated publicKey (first 40 chars):",
-    publicKey.slice(0, 40),
-  );
-
   const device: Device = {
     id: id,
     name: name,
@@ -76,8 +67,6 @@ export const POST = async (req: Request, res: Response): Promise<void> => {
   deviceStore.set(device.id, device);
   secretKeys.set(device.id, secretKey);
   logAction('DEVICE_CONNECT', device, device.id);
-
-  console.log('New Device:\n', device);
 
   res.status(201).json(device);
 };
@@ -105,5 +94,4 @@ export const DELETE = (req: Request, res: Response): void => {
   secretKeys.delete(normalizedId);
   logAction('DEVICE_DISCONNECT', { id: normalizedId }, normalizedId);
   res.status(200).json({ deleted: true, id: normalizedId });
-  console.log('Device with ID: ', id, ' deleted!');
 };
