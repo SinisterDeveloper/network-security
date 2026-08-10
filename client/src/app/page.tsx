@@ -2,19 +2,21 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Device } from "@/app/lib/types"
+import { Device, DeviceListItem, PendingDevicePayload } from "@/app/lib/types"
 import { DeviceCard } from "@/components/devices/device-card"
 import { apiFetch, ApiError } from "@/lib/api"
+import { usePagination } from "@/hooks/use-pagination"
+import { useGatewayStatus } from "@/hooks/use-gateway"
 
 const POLL_INTERVAL_MS = 5000
 
+function maskPuf(puf: string): string {
+  return `${puf.slice(0, 16)}…${puf.slice(-8)} (${puf.length} hex)`;
+}
+
 const INITIAL_DEVICES: Device[] = []
 
-type DiscoveryPayload = {
-  mac: string
-  puf: string
-  firmwareHash: string
-}
+type DiscoveryPayload = PendingDevicePayload;
 
 type RegistrationResponse = {
   id: string
@@ -27,21 +29,14 @@ type RegistrationResponse = {
   registeredAt?: number
 }
 
-type DeviceListItem = {
-  id: string
-  name: string
-  mac: string
-  puf: string
-  publicKey?: string
-  messages?: unknown[]
-  registeredAt: number
-  firmwareHash: string
-}
-
 export default function Home() {
   const [devices, setDevices] = React.useState<Device[]>(INITIAL_DEVICES)
   const [pendingDevice, setPendingDevice] = React.useState<DiscoveryPayload | null>(null)
+  const [revealPuf, setRevealPuf] = React.useState(false)
   const [deviceName, setDeviceName] = React.useState("")
+  const [nameError, setNameError] = React.useState<string | null>(null)
+  const pager = usePagination(devices, 8)
+  const gatewayStatus = useGatewayStatus()
   const [pollStatus, setPollStatus] = React.useState("Waiting for device discovery...")
   const [pollError, setPollError] = React.useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
@@ -68,6 +63,10 @@ export default function Home() {
         const mapped = data.map((item) => ({
           id: item.id,
           name: item.name || item.mac,
+          mac: item.mac,
+          puf: item.puf,
+          firmwareHash: item.firmwareHash,
+          registeredAt: item.registeredAt,
           macAddress: item.mac,
           status: "online" as const,
           addedAt: new Date(item.registeredAt)
@@ -90,10 +89,16 @@ export default function Home() {
     }
   }, [])
 
-  const handleAddDevice = (newDeviceData: Omit<Device, "status" | "addedAt">) => {
+  const handleAddDevice = (newDeviceData: { id: string; name: string; mac: string; puf?: string; firmwareHash?: string; registeredAt?: number }) => {
+    const now = Date.now();
     const newDevice: Device = {
-      ...newDeviceData,
       id: newDeviceData.id,
+      name: newDeviceData.name,
+      mac: newDeviceData.mac,
+      macAddress: newDeviceData.mac,
+      puf: newDeviceData.puf ?? "",
+      firmwareHash: newDeviceData.firmwareHash ?? "",
+      registeredAt: newDeviceData.registeredAt ?? now,
       status: "online",
       addedAt: new Date()
     }
@@ -159,8 +164,17 @@ export default function Home() {
   }
 
   const safeDeviceName = deviceName ?? ""
+  const validateName = (v: string) => {
+    const t = v.trim();
+    if (!t) return "Name required";
+    if (t.length > 64) return "Max 64 chars";
+    return null;
+  };
 
   const handleConfirm = async () => {
+    const err = validateName(safeDeviceName);
+    if (err) { setNameError(err); return; }
+    setNameError(null);
     if (!pendingDevice) {
       return
     }
@@ -187,7 +201,10 @@ export default function Home() {
       handleAddDevice({
         id: registered.id,
         name: registered.name || safeDeviceName,
-        macAddress: registered.mac
+        mac: registered.mac,
+        puf: registered.puf,
+        firmwareHash: registered.firmwareHash,
+        registeredAt: registered.registeredAt,
       })
       pendingDeviceRef.current = null
       setPendingDevice(null)
@@ -232,8 +249,11 @@ export default function Home() {
             Zero Trust Gateway for Silicon-Based IoT Security
           </h1>
           <div className="text-[10px] text-muted-foreground uppercase tracking-widest">
-            STATUS: ACTIVE | COUNT: {devices.length}
+            STATUS: ACTIVE | COUNT: {devices.length} {gatewayStatus ? `| GATEWAY BLOCKED: ${gatewayStatus.blockedDevices.length}` : "| GATEWAY: unknown"}
           </div>
+          {gatewayStatus?.blockedDevices.length ? (
+            <p className="text-[10px] text-amber-300">Client is read-only for blocks — use admin (8080) to manage gateway blocks.</p>
+          ) : null}
         </header>
 
         <main className="space-y-4">
@@ -245,14 +265,25 @@ export default function Home() {
 
           <div className="border-t border-foreground pt-4">
             {devices.length > 0 ? (
-              devices.map((device) => (
-              <DeviceCard
-                  key={device.id}
-                  device={device}
-                  onRemove={queueDeviceDeletion}
-                  onSelect={handleSelectDevice}
-                />
-              ))
+              <>
+                {pager.paged.map((device) => (
+                <DeviceCard
+                    key={device.id}
+                    device={device}
+                    onRemove={queueDeviceDeletion}
+                    onSelect={handleSelectDevice}
+                  />
+                ))}
+                {pager.totalPages > 1 && (
+                  <div className="flex items-center justify-between pt-3 text-xs">
+                    <span className="text-muted-foreground">Page {pager.page} of {pager.totalPages} ({pager.total})</span>
+                    <div className="flex gap-2">
+                      <button className="rounded border border-white/20 px-2 py-1 disabled:opacity-40" disabled={pager.page <= 1} onClick={() => pager.setPage(pager.page - 1)}>Prev</button>
+                      <button className="rounded border border-white/20 px-2 py-1 disabled:opacity-40" disabled={pager.page >= pager.totalPages} onClick={() => pager.setPage(pager.page + 1)}>Next</button>
+                    </div>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="py-8 text-[10px] text-muted-foreground uppercase">
                 NO_RECORDS_FOUND
@@ -303,11 +334,13 @@ export default function Home() {
                   <span className="text-slate-400">MAC:</span> {lastRegistered.mac}
                 </p>
                 <p>
-                  <span className="text-slate-400">PUF:</span> {lastRegistered.puf}
+                  <span className="text-slate-400">PUF:</span>{" "}
+                  <span className="font-mono break-all">{revealPuf ? lastRegistered.puf : maskPuf(lastRegistered.puf)}</span>{" "}
+                  <button type="button" className="underline text-[10px]" onClick={() => setRevealPuf((v) => !v)}>{revealPuf ? "Hide" : "Reveal"}</button>
                 </p>
                 <p>
                   <span className="text-slate-400">Firmware Hash:</span>{" "}
-                  {lastRegistered.firmwareHash}
+                  <span className="font-mono break-all">{lastRegistered.firmwareHash}</span>
                 </p>
               </div>
             ) : (
@@ -331,8 +364,9 @@ export default function Home() {
                 <input
                   className="rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-white outline-none transition hover:border-white/40 focus:border-white/70"
                   value={safeDeviceName}
-                  onChange={(event) => setDeviceName(event.target.value)}
+                  onChange={(event) => { setDeviceName(event.target.value); if (nameError) setNameError(validateName(event.target.value)); }}
                 />
+                {nameError && <span className="text-xs text-red-300">{nameError}</span>}
             </label>
             <div className="grid gap-3 sm:grid-cols-2">
               <button
