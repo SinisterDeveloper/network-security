@@ -5,13 +5,26 @@
     "server",
     "blockchain",
     "gateway",
-    "admin"
+    "admin",
+    "client"
   ],
   "scripts": {
     "server:dev": "npm run dev -w server",
     "blockchain:deploy": "npm run deploy -w blockchain",
     "gateway:start": "npm run start -w gateway",
     "admin:dev": "npm run dev -w admin",
-    "admin:build": "npm run build -w admin"
+    "admin:build": "npm run build -w admin",
+    "client:dev": "npm run dev -w client",
+    "client:build": "npm run build -w client"
+  },
+  "dependencies": {
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1"
+  },
+  "overrides": {
+    "react": "$react",
+    "react-dom": "$react-dom",
+    "@types/react": "^19.2.1",
+    "@types/react-dom": "^19.2.1"
   }
 }
