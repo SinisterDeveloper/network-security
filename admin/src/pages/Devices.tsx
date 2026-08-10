@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useDevices, useDeleteDevice, useDeviceMessages, useBlockDevice, useGatewayStatus } from "@/hooks/use-api";
+import { useDevices, useDeleteDevice, useDeviceMessages, useBlockDevice, useGatewayStatus, useUnblockDevice } from "@/hooks/use-api";
+import { usePagination } from "@/hooks/use-pagination";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -62,7 +63,10 @@ export default function Devices() {
   const { data: devices, isLoading } = useDevices();
   const deleteMutation = useDeleteDevice();
   const blockMutation = useBlockDevice();
+  const unblockMutation = useUnblockDevice();
   const { data: gatewayStatus } = useGatewayStatus();
+  const devicesList = useMemo(() => devices ?? [], [devices]);
+  const pager = usePagination(devicesList, 8);
   const { toast } = useToast();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
@@ -81,12 +85,18 @@ export default function Devices() {
   };
 
   const handleBlock = async (device: { sram: string; mac: string }) => {
+    const isBlocked = gatewayStatus?.blockedDevices?.some((b) => b.mac === device.mac);
     try {
-      await blockMutation.mutateAsync({ sram: device.sram, mac: device.mac });
-      toast({ title: `Blocked ${device.mac} at gateway` });
+      if (isBlocked) {
+        await unblockMutation.mutateAsync({ mac: device.mac });
+        toast({ title: `Unblocked ${device.mac}` });
+      } else {
+        await blockMutation.mutateAsync({ sram: device.sram, mac: device.mac });
+        toast({ title: `Blocked ${device.mac} at gateway` });
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      toast({ title: "Block failed", description: msg, variant: "destructive" });
+      toast({ title: isBlocked ? "Unblock failed" : "Block failed", description: msg, variant: "destructive" });
     }
   };
 
@@ -107,11 +117,12 @@ export default function Devices() {
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-40 rounded-lg" />)}
         </div>
-      ) : !devices?.length ? (
+      ) : !devicesList.length ? (
         <div className="rounded-lg border bg-card p-12 text-center text-muted-foreground">No devices registered</div>
       ) : (
-        <div className="space-y-3">
-          {devices.map((device, i) => {
+        <>
+          <div className="space-y-3">
+            {pager.paged.map((device, i) => {
             const isExpanded = expandedId === device.id;
             return (
               <motion.div
@@ -142,15 +153,20 @@ export default function Devices() {
                     </div>
                   </div>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-amber-600 hover:text-amber-600"
-                        onClick={(e) => { e.stopPropagation(); handleBlock({ sram: device.puf, mac: device.mac }); }}
-                        disabled={blockMutation.isPending}
-                      >
-                        Block at gateway
-                      </Button>
+                      {(() => {
+                        const isBlocked = gatewayStatus?.blockedDevices?.some((b) => b.mac === device.mac);
+                        return (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={isBlocked ? "text-emerald-600 hover:text-emerald-600" : "text-amber-600 hover:text-amber-600"}
+                            onClick={(e) => { e.stopPropagation(); handleBlock({ sram: device.puf, mac: device.mac }); }}
+                            disabled={blockMutation.isPending || unblockMutation.isPending}
+                          >
+                            {isBlocked ? "Unblock" : "Block at gateway"}
+                          </Button>
+                        );
+                      })()}
                       <Button
                         variant="ghost"
                         size="sm"
@@ -213,7 +229,17 @@ export default function Devices() {
               </motion.div>
             );
           })}
-        </div>
+          </div>
+          {pager.totalPages > 1 && (
+            <div className="flex items-center justify-between pt-2 text-xs">
+              <span className="text-muted-foreground">Page {pager.page} of {pager.totalPages} ({pager.total} devices)</span>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" disabled={pager.page <= 1} onClick={() => pager.setPage(pager.page - 1)}>Prev</Button>
+                <Button size="sm" variant="outline" disabled={pager.page >= pager.totalPages} onClick={() => pager.setPage(pager.page + 1)}>Next</Button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       <AlertDialog open={!!confirmDeleteId} onOpenChange={(o) => !o && setConfirmDeleteId(null)}>

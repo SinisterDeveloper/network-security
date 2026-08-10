@@ -17,8 +17,9 @@ export interface Message {
 
 export interface LogEntry {
   key: string;
-  value: any;
+  value: unknown;
   timestamp?: number;
+  id?: string | null;
 }
 
 export interface Device {
@@ -123,9 +124,8 @@ export const api = {
   registerDevice: (payload: RegisterDevicePayload) =>
     apiFetch<Device>("/client/device", { method: "POST", body: JSON.stringify(payload) }),
   deleteDevice: (id: string) =>
-    apiFetch<{ deleted: boolean; id: string }>("/client/device", {
+    apiFetch<{ deleted: boolean; id: string }>(`/client/device?id=${encodeURIComponent(id)}`, {
       method: "DELETE",
-      body: JSON.stringify({ id }),
     }),
   getAdminRetry: () => apiFetch<{ pending: number }>("/admin/retry"),
   getGatewayStatus: () => gatewayFetch<{ status: string; blockedDevices: BlockedEntry[] }>("/"),
@@ -134,9 +134,13 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  unblockDevice: (payload: { sram?: string; mac?: string }) =>
-    gatewayFetch<{ unblocked: number }>("/admin/block", {
+  unblockDevice: (payload: { sram?: string; mac?: string }) => {
+    const qs = new URLSearchParams();
+    if (payload.sram) qs.set("sram", payload.sram);
+    if (payload.mac) qs.set("mac", payload.mac);
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return gatewayFetch<{ unblocked: number }>(`/admin/block${suffix}`, {
       method: "DELETE",
-      body: JSON.stringify(payload),
-    }),
+    });
+  },
 };

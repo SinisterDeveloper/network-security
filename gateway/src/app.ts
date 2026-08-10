@@ -67,14 +67,17 @@ export function createGatewayApp() {
     res.status(201).json({ blocked: true, entry: { mac: entry.mac, blockedAt: entry.blockedAt } });
   });
 
-  // Unblock helper for MVP
+  // Unblock helper for MVP — supports query ?mac=&sram= for proxy-safe DELETE without body
   app.delete('/admin/block', gatewayAdminAuth, (req, res) => {
-    const { sram, mac } = req.body || {};
+    const q = req.query as { sram?: string; mac?: string };
+    const b = (req.body || {}) as { sram?: string; mac?: string };
+    const sram = q.sram ?? b.sram;
+    const mac = q.mac ?? b.mac;
     const list = getBlockedDevices();
     const before = list.length;
-    const filtered = list.filter((b) => {
-      if (sram && b.sram === sram) return false;
-      if (mac && b.mac === mac) return false;
+    const filtered = list.filter((blocked) => {
+      if (sram && blocked.sram === sram) return false;
+      if (mac && blocked.mac === mac) return false;
       return true;
     });
     if (filtered.length === before) return res.status(404).json({ error: 'No matching blocked entry' });

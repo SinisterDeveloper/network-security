@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { useAdminLogs } from "@/hooks/use-api";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -6,19 +6,24 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { usePagination } from "@/hooks/use-pagination";
 
 export default function Logs() {
   const { data, isLoading } = useAdminLogs();
-  const deviceList = Array.isArray(data?.devices) ? data.devices : [];
-  const logEntries = Array.isArray(data?.logs) ? data.logs : [];
   const { toast } = useToast();
   const [selectedHash, setSelectedHash] = useState<string | null>(null);
   const [selectedLog, setSelectedLog] = useState<{ key: string; value: unknown } | null>(null);
 
-  const allMessages = deviceList.flatMap((d) =>
-    d.messages.map((m) => ({ ...m, deviceName: d.name }))
-  );
-  allMessages.sort((a, b) => b.timestamp - a.timestamp);
+  const deviceList = useMemo(() => (Array.isArray(data?.devices) ? data.devices : []), [data]);
+  const logEntries = useMemo(() => (Array.isArray(data?.logs) ? data.logs : []), [data]);
+
+  const allMessages = useMemo(() => {
+    const msgs = deviceList.flatMap((d) => d.messages.map((m) => ({ ...m, deviceName: d.name })));
+    msgs.sort((a, b) => b.timestamp - a.timestamp);
+    return msgs;
+  }, [deviceList]);
+
+  const msgPager = usePagination(allMessages, 10);
 
   const copyHash = (hash: string) => {
     navigator.clipboard.writeText(hash);
@@ -83,6 +88,8 @@ export default function Logs() {
   const buildPolygonscanUrl = (hash: string) =>
     `https://amoy.polygonscan.com/tx/${encodeURIComponent(hash)}`;
 
+  const logPager = usePagination(actionRows, 10);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -108,19 +115,20 @@ export default function Logs() {
             No messages recorded
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[180px]">Timestamp</TableHead>
-                <TableHead className="w-[80px]">Sender</TableHead>
-                <TableHead className="w-[120px]">Device</TableHead>
-                <TableHead>Payload</TableHead>
-                <TableHead className="w-[280px]">Hash</TableHead>
-                <TableHead className="w-[60px]" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {allMessages.map((msg, i) => {
+          <>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[180px]">Timestamp</TableHead>
+                  <TableHead className="w-[80px]">Sender</TableHead>
+                  <TableHead className="w-[120px]">Device</TableHead>
+                  <TableHead>Payload</TableHead>
+                  <TableHead className="w-[280px]">Hash</TableHead>
+                  <TableHead className="w-[60px]" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {msgPager.paged.map((msg, i) => {
                 const hashPreview = msg.hash ? `${msg.hash.slice(0, 20)}…` : "No hash";
                 const rowKey = msg.hash ?? `${msg.timestamp}-${i}`;
                 const payloadValue = getMessagePayload(msg);
@@ -181,6 +189,16 @@ export default function Logs() {
               })}
             </TableBody>
           </Table>
+          {msgPager.totalPages > 1 && (
+            <div className="flex items-center justify-between border-t px-4 py-3 text-xs">
+              <span className="text-muted-foreground">Page {msgPager.page} of {msgPager.totalPages} ({msgPager.total} total)</span>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" disabled={msgPager.page <= 1} onClick={() => msgPager.setPage(msgPager.page - 1)}>Prev</Button>
+                <Button size="sm" variant="outline" disabled={msgPager.page >= msgPager.totalPages} onClick={() => msgPager.setPage(msgPager.page + 1)}>Next</Button>
+              </div>
+            </div>
+          )}
+          </>
         )}
       </motion.div>
 
@@ -205,17 +223,18 @@ export default function Logs() {
         ) : actionRows.length === 0 ? (
           <div className="p-10 text-sm text-muted-foreground text-center">No actions recorded yet</div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[160px]">Timestamp</TableHead>
-                <TableHead className="w-[150px]">Event</TableHead>
-                <TableHead className="w-[120px]">Device</TableHead>
-                <TableHead>Details</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {actionRows.map((row) => (
+          <>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[160px]">Timestamp</TableHead>
+                  <TableHead className="w-[150px]">Event</TableHead>
+                  <TableHead className="w-[120px]">Device</TableHead>
+                  <TableHead>Details</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {logPager.paged.map((row) => (
                 <TableRow key={`${row.entry.key}-${row.index}`} className="border-b transition-colors hover:bg-muted/50">
                   <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
                     {row.timestamp ? new Date(row.timestamp).toLocaleString() : "—"}
@@ -242,6 +261,16 @@ export default function Logs() {
               ))}
             </TableBody>
           </Table>
+          {logPager.totalPages > 1 && (
+            <div className="flex items-center justify-between border-t px-4 py-3 text-xs">
+              <span className="text-muted-foreground">Page {logPager.page} of {logPager.totalPages} ({logPager.total} total)</span>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" disabled={logPager.page <= 1} onClick={() => logPager.setPage(logPager.page - 1)}>Prev</Button>
+                <Button size="sm" variant="outline" disabled={logPager.page >= logPager.totalPages} onClick={() => logPager.setPage(logPager.page + 1)}>Next</Button>
+              </div>
+            </div>
+          )}
+          </>
         )}
       </motion.div>
 

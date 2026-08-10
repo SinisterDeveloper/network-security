@@ -1,3 +1,4 @@
+import { Suspense, lazy } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -5,10 +6,12 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
-import Dashboard from "./pages/Dashboard";
-import Devices from "./pages/Devices";
-import Logs from "./pages/Logs";
+import { Skeleton } from "@/components/ui/skeleton";
 import NotFound from "./pages/NotFound";
+
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Devices = lazy(() => import("./pages/Devices"));
+const Logs = lazy(() => import("./pages/Logs"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -34,12 +37,14 @@ const App = () => (
                 <SidebarTrigger className="ml-3" />
               </header>
               <main className="flex-1 p-6">
-                <Routes>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/devices" element={<Devices />} />
-                  <Route path="/logs" element={<Logs />} />
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
+                <Suspense fallback={<div className="space-y-3"><Skeleton className="h-24" /><Skeleton className="h-64" /></div>}>
+                  <Routes>
+                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/devices" element={<Devices />} />
+                    <Route path="/logs" element={<Logs />} />
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </Suspense>
               </main>
             </div>
           </div>

@@ -24,9 +24,12 @@ export const POST = async (req: Request, res: Response): Promise<void> => {
 };
 
 export const DELETE = (req: Request, res: Response): void => {
-  const { id } = req.body as { id?: string | number };
-  const normalizedId = deviceRepository.normalizeId(id);
-  if (normalizedId === null) { res.status(400).json({ error: '"id" must be a 5-digit numeric value' }); return; }
+  const rawId =
+    (req.query as { id?: string }).id ??
+    (req.body as { id?: string | number }).id ??
+    (req.params as { id?: string }).id;
+  const normalizedId = deviceRepository.normalizeId(rawId);
+  if (normalizedId === null) { res.status(400).json({ error: '"id" must be a 5-digit numeric value (query ?id= or body {id})' }); return; }
   if (!deviceRepository.has(normalizedId)) { res.status(404).json({ error: 'Device not found' }); return; }
   deviceService.delete(normalizedId);
   res.status(200).json({ deleted: true, id: normalizedId });
