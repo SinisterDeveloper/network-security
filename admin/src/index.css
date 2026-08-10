@@ -1,0 +1,84 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 14% 10%;
+    --foreground: 220 10% 88%;
+
+    --card: 220 14% 13%;
+    --card-foreground: 220 10% 88%;
+
+    --popover: 220 14% 13%;
+    --popover-foreground: 220 10% 88%;
+
+    --primary: 152 60% 48%;
+    --primary-foreground: 220 14% 6%;
+
+    --secondary: 220 14% 18%;
+    --secondary-foreground: 220 10% 78%;
+
+    --muted: 220 12% 16%;
+    --muted-foreground: 220 8% 52%;
+
+    --accent: 220 14% 18%;
+    --accent-foreground: 220 10% 88%;
+
+    --destructive: 0 72% 52%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 220 12% 20%;
+    --input: 220 12% 20%;
+    --ring: 152 60% 48%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 220 16% 8%;
+    --sidebar-foreground: 220 10% 72%;
+    --sidebar-primary: 152 60% 48%;
+    --sidebar-primary-foreground: 220 14% 6%;
+    --sidebar-accent: 220 14% 14%;
+    --sidebar-accent-foreground: 220 10% 88%;
+    --sidebar-border: 220 12% 16%;
+    --sidebar-ring: 152 60% 48%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 38 10% 10%;
+    --info: 210 80% 56%;
+    --info-foreground: 210 10% 10%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  .font-mono {
+    font-family: 'JetBrains Mono', monospace !important;
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: hsl(220 14% 10%);
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(220 12% 24%);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(220 12% 32%);
+}
