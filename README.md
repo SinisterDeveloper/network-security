@@ -4,7 +4,7 @@ A secure embedded telemetry platform that combines post-quantum cryptography, de
 
 The system is designed for ESP32 and ESP8266 devices that report sensor data through an untrusted network to a backend that verifies device identity, decrypts payloads, and anchors message hashes on the Polygon Amoy testnet.
 
-The repository is a monorepo with four packages: backend server, gateway proxy, on-chain hash storage, and ESP firmware. After the recent refactoring the architecture uses explicit service and repository layers in the server, a stateless gateway, HKDF-based key derivation, and modular PlatformIO firmware for both ESP targets.
+The repository is a monorepo with six packages: backend server, gateway proxy, on-chain hash storage, ESP firmware, admin console, and client registry. After the recent refactoring the architecture uses explicit service and repository layers in the server, a stateless gateway, HKDF-based key derivation, modular PlatformIO firmware for both ESP targets, and two Next/Vite frontends that share the same server API through env-driven rewrites.
 
 ### Team
 
@@ -43,8 +43,8 @@ Data flow is end to end encrypted. The gateway never decrypts. It only validates
 
 ```
 EmbSecServer/
-  .env.example                # single env template for all packages
-  package.json                # workspaces: server, blockchain, gateway
+  .env.example                # single env template for server + gateway (root)
+  package.json                # workspaces: server, blockchain, gateway, admin, client (React 19 pinned at root)
   server/                     # backend (Node 22, TypeScript, Express 5)
     src/
       index.ts                # dotenv loading, config validation, retry interval
@@ -81,6 +81,21 @@ EmbSecServer/
     contracts/HashStorage.sol # Solidity 0.8.20
     scripts/deploy.js         # hardhat deploy
     hardhat.config.js         # amoy network
+  admin/                      # operator console (Vite + React 19, :8080)
+    src/
+      lib/api.ts              # API_BASE=VITE_API_BASE, X-Admin-Key, gatewayFetch
+      hooks/use-api.ts        # useDevices, usePendingDevice, useBlockDevice, useGatewayStatus
+      components/             # PendingDeviceCard, AddDeviceDialog (zod 1024/64 hex), masked PUF
+      pages/                  # Dashboard, Devices, Logs (pagination, Polygonscan tx links)
+    .env.example              # VITE_API_BASE, VITE_GATEWAY_BASE, VITE_ADMIN_KEY
+  client/                     # self-service registry (Next 15 + React 19, :9002)
+    src/
+      lib/api.ts              # NEXT_PUBLIC_API_BASE, ApiError, admin:true flag
+      hooks/                  # use-pagination, use-gateway (read-only)
+      app/                    # Home (poll /admin/new, enroll, paginated cards), devices/[id]
+      components/devices/     # DeviceCard, MacInput
+    .env.example              # NEXT_PUBLIC_API_BASE, NEXT_PUBLIC_GATEWAY_BASE, NEXT_PUBLIC_ADMIN_KEY
+    next.config.ts            # rewrites /client/* and /admin/* to API_BASE, outputFileTracingRoot
   esp/                        # firmware (PlatformIO, Arduino)
     platformio.ini            # env:esp8266, env:esp32, env:esp32c3
     include/
@@ -131,6 +146,14 @@ PlatformIO project building for both ESP8266 and ESP32 from one codebase.
 *   `gateway_client.cpp` implements `gateway_encrypt`, `gateway_encryptViaMac`, `gateway_fetchPublicKey`, and `gateway_sendData` with `HTTPClient` differences abstracted for ESP8266 (`WiFiClient` + `begin(client, url)`) and ESP32 (`begin(url)`).
 *   `src/main.cpp` resolves the public key in order hardcoded → cached → `POST /client/publicKey {mac}` via `SERVER_HOST`, falls back to `gateway_encryptViaMac` (server resolves by mac), then loops every `LOOP_INTERVAL_MS` 5s: `wifi_isConnected` → `puf_toHex` → `plaintext {mac, sram}` → encrypt → `POST /data` with `X-MAC-Address` and `X-SRAM-Data`.
 
+### Admin Console
+
+Operator UI on Vite `:8080` with React 19, `admin/src/lib/api.ts:1` (`VITE_API_BASE` default `3000`, `VITE_GATEWAY_BASE` default `8824`) and `X-Admin-Key` header. Polls `GET /admin/new` every 5s (like gateway `shouldNotifyAdmin` 30s cooldown), surfaces `PendingDeviceCard` with Approve flow pre-filling `AddDeviceDialog` validated by `zod` `MAC_REGEX` / `HEX_1024` / `HEX_64`. Masks `PUF` and `publicKey` with `Reveal/Hide`, confirms `DELETE /client/device?id=` via `AlertDialog`, and drives gateway `POST /admin/block` / `DELETE /admin/block?mac=` (+ `GET /` blockedDevices) with `gatewayFetch` and `CORS` (`gateway/src/app.ts:14`). `Dashboard` shows `pending` from `GET /admin/retry` and `blockedDevices.length`.
+
+### Client Registry
+
+Self-service UI on Next 15 `:9002` with `client/src/lib/api.ts:1` (`NEXT_PUBLIC_API_BASE` default `3000`). Same server API via `next.config.ts:4` `rewrites` (`/client/*` and `/admin/*` → `API_BASE`) so `9002` never hardcodes `6767`. Polls `GET /admin/new` with `admin:true` every 5s, enrolls via `POST /client/device`, deletes via `DELETE /client/device?id=` (proxy-safe, `server/src/routers/client/device.ts:26` supports `?id=`), paginates device cards with `usePagination` (8/page, `client/src/hooks/use-pagination.ts:1`). Shows gateway `GET /` blocked count read-only with note `Client is read-only for blocks — use admin (8080)`. Masks `PUF` in lastRegistered payload and validates `deviceName` (1–64 chars) before enroll.
+
 ### Blockchain
 
 `blockchain/contracts/HashStorage.sol` stores `Record { sender, timestamp, hash, metadata }` in `records` with `storeHash(string hash, string metadata)` and event `HashStored`. Deployment targets Polygon Amoy. The server loads the ABI from `blockchain/artifacts/contracts/HashStorage.sol/HashStorage.json` and uses `ethers.JsonRpcProvider` and `Wallet`.
@@ -145,12 +168,18 @@ PlatformIO project building for both ESP8266 and ESP32 from one codebase.
 
 ## Configuration
 
-All packages share a single `.env` at the repository root. Copy `cp .env.example .env` and fill values.
+Server and gateway share a single `.env` at the repository root. UIs have their own `client/.env` and `admin/.env` (both gitignored, see `.env.example`). Copy each and fill values.
+
+```bash
+cp .env.example .env
+cp admin/.env.example admin/.env
+cp client/.env.example client/.env
+```
 
 | Variable | Default | Used by | Description |
 | --- | --- | --- | --- |
 | `SERVER_PORT` | 3000 | server | Express listen port |
-| `CORS_ORIGINS` | empty (allow all) | server | Comma list of allowed origins, empty means permissive |
+| `CORS_ORIGINS` | `http://localhost:8080,http://localhost:9002` | server | Comma list of allowed origins, empty means permissive |
 | `ADMIN_KEY` | empty (open) | server, gateway | When set, `X-Admin-Key` required for `/admin/*` and gateway uses it for `/admin/new` |
 | `GATEWAY_PORT` | 8824 | gateway | Gateway listen port |
 | `FORWARD_BASE` | http://localhost:3000 | gateway | Server base URL the gateway forwards to |
@@ -159,6 +188,12 @@ All packages share a single `.env` at the repository root. Copy `cp .env.example
 | `AMOY_RPC_URL` | https://rpc-amoy.polygon.technology | server, blockchain | Polygon Amoy RPC |
 | `PRIVATE_KEY` | empty | server, blockchain | EOA for `HashStorage.storeHash`; also `AMOY_PRIVATE_KEY` alias |
 | `CONTRACT_ADDRESS` | empty | server | Deployed `HashStorage` address; server queues hashes while unset |
+| `VITE_API_BASE` | `http://localhost:3000` | admin | Server base URL, injected into fetch; admin polls `/admin/new` every 5s |
+| `VITE_GATEWAY_BASE` | `http://localhost:8824` | admin | Gateway base for `GET /` and `/admin/block` (CORS enabled in gateway) |
+| `VITE_ADMIN_KEY` | empty | admin | Sent as `X-Admin-Key` for `/admin/*` and gateway block; must match root `ADMIN_KEY` |
+| `NEXT_PUBLIC_API_BASE` | `http://localhost:3000` | client | Server base URL, used by `lib/api.ts` and `next.config.ts` rewrites |
+| `NEXT_PUBLIC_GATEWAY_BASE` | `http://localhost:8824` | client | Read-only `GET /` blocked count display |
+| `NEXT_PUBLIC_ADMIN_KEY` | empty | client | Sent as `X-Admin-Key` for `GET /admin/new` poll when set |
 
 ESP firmware uses `esp/include/config.h` instead of `.env`:
 
@@ -175,7 +210,7 @@ ESP firmware uses `esp/include/config.h` instead of `.env`:
 
 ## Installation
 
-Requirements: Node.js 18 or newer, npm, PlatformIO Core for ESP, and for blockchain an Amoy RPC and funded private key.
+Requirements: Node.js 20 or newer, npm 10+, PlatformIO Core for ESP, and for blockchain an Amoy RPC and funded private key. React 19 is pinned at the monorepo root (`overrides`) so `admin`, `client`, and `Next 15` dedupe correctly.
 
 ```bash
 # 1. Install all Node workspaces from root
@@ -183,7 +218,10 @@ npm install
 
 # 2. Configure environment
 cp .env.example .env
+cp admin/.env.example admin/.env
+cp client/.env.example client/.env
 # edit .env: set PRIVATE_KEY, CONTRACT_ADDRESS after deploy, ADMIN_KEY, etc.
+# edit admin/.env and client/.env: set VITE_* / NEXT_PUBLIC_* to http://localhost:3000 and ADMIN_KEY if set
 
 # 3. Configure ESP
 cp esp/include/config.h.example esp/include/config.h
@@ -216,7 +254,38 @@ npm run dev -w gateway   # ts-node/esm src/index.ts
 npm run gateway:start
 ```
 
-Gateway listens on `GATEWAY_PORT`, loads `data.json` (blockedDevices only, migrates old files), and proxies to `FORWARD_BASE`.
+Gateway listens on `GATEWAY_PORT`, loads `data.json` (blockedDevices only, migrates old files), proxies to `FORWARD_BASE`, and enables `CORS` for admin/client.
+
+### Admin Console
+
+```bash
+# Development :8080 with proxy for /client and /admin to VITE_API_BASE
+npm run admin:dev        # or npm run dev -w admin
+# Production bundle (chunked: vendor/query/ui)
+npm run admin:build      # vite build -> dist/
+npm run preview -w admin # serve dist on 4173
+```
+
+Admin polls `GET /admin/new` every 5s, approves via `PendingDeviceCard` → `AddDeviceDialog` → `POST /client/device`, blocks via `POST /admin/block` (1024 hex `sram`) on `VITE_GATEWAY_BASE`, paginates `Logs` and `Devices`, and shows masked `PUF`/`publicKey` with `Reveal/Hide`. Set `VITE_ADMIN_KEY` to match root `ADMIN_KEY` or `401 Unauthorized` is shown.
+
+### Client Registry
+
+```bash
+# Development :9002 with Turbopack and rewrites /client/* /admin/* → NEXT_PUBLIC_API_BASE
+npm run client:dev       # or npm run dev -w client
+# Production (strict types, no ignoreBuildErrors)
+npm run client:build     # next build
+npm run start -w client  # next start on 3000 (or 9002 via -p)
+```
+
+Client is self-service: polls `GET /admin/new` (`admin:true` header) every 5s, enrolls `POST /client/device`, lists `GET /client/metadata` (paginated 8/page), views `devices/[id]` (`GET /client/message?id=`), shows `GATEWAY BLOCKED: n` read-only and validates `deviceName` 1–64 chars. No gateway block privileges (use admin).
+
+Run all three UIs together:
+
+```bash
+npm run server:dev & npm run gateway:start & npm run admin:dev & npm run client:dev
+# server 3000, gateway 8824, admin 8080, client 9002
+```
 
 ### Blockchain
 
@@ -258,7 +327,7 @@ Alternatively let the gateway auto-derive `firmwareHash` as `SHA-256(sramHex)` w
 Full request and response shapes are in `server/README.md`. Summary:
 
 *   `POST /client/device` `{ name, puf, mac, firmwareHash }` → 201 `Device` with `publicKey`
-*   `DELETE /client/device` `{ id }` → 200
+*   `DELETE /client/device?id=10001` → 200 (query, proxy-safe; body `{id}` still supported)
 *   `POST /client/encrypt` `{ publicKey or mac or id, plaintext }` → 200 `{ kyberCiphertextBase64, ivBase64, payloadCiphertextBase64 }`
 *   `POST /client/message` `{ id, data or payloadCiphertextBase64, kyberCiphertextBase64, ivBase64 }` → 201 `Message { data, timestamp, hash, sender, hashStored }`
 *   `GET /client/message?id=10001` → 200 `Message[]`
@@ -274,9 +343,9 @@ Gateway proxies:
 
 *   `POST /encrypt` → `FORWARD_BASE/client/encrypt`
 *   `POST /data` → validates PUF then `FORWARD_BASE/client/message` (headers `X-MAC-Address`, `X-SRAM-Data`, optional `X-Firmware-Hash`)
-*   `POST /admin/block` `{ sram: 1024 hex, mac }` → 201 (Hamming-aware block)
-*   `DELETE /admin/block` → removes block entry
-*   `GET /` → `{ status, blockedDevices }`
+*   `POST /admin/block` `{ sram: 1024 hex, mac }` → 201 (Hamming-aware block, `X-Admin-Key` when set)
+*   `DELETE /admin/block?mac=&sram=` → removes block entry (query, proxy-safe)
+*   `GET /` → `{ status, blockedDevices }` (CORS enabled, read by admin `useGatewayStatus` and client read-only)
 
 ## Operational Notes
 

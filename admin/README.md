@@ -16,4 +16,4 @@ Monorepo is wired via root `workspaces` (`server`, `blockchain`, `gateway`, `adm
 
 ## Stack
 
-Vite, React 18, TypeScript, shadcn-ui, Tailwind, TanStack Query, react-hook-form + zod.
+Vite, React 19, TypeScript, shadcn-ui, Tailwind, TanStack Query, react-hook-form + zod. Pinned via root `overrides` to dedupe with Next 15 client.
