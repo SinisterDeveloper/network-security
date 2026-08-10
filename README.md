@@ -1,8 +1,17 @@
-# EmbSecServer
+# Embedded System Network Security
 
-EmbSecServer is a secure embedded telemetry platform that combines post-quantum cryptography, device identity based on SRAM PUF, a stateless gateway firewall, and blockchain-anchored integrity. The system is designed for ESP32 and ESP8266 devices that report sensor data through an untrusted network to a backend that verifies device identity, decrypts payloads, and anchors message hashes on the Polygon Amoy testnet.
+A secure embedded telemetry platform that combines post-quantum cryptography, device identity based on SRAM PUF, a stateless gateway firewall, and blockchain-anchored integrity. 
+
+The system is designed for ESP32 and ESP8266 devices that report sensor data through an untrusted network to a backend that verifies device identity, decrypts payloads, and anchors message hashes on the Polygon Amoy testnet.
 
 The repository is a monorepo with four packages: backend server, gateway proxy, on-chain hash storage, and ESP firmware. After the recent refactoring the architecture uses explicit service and repository layers in the server, a stateless gateway, HKDF-based key derivation, and modular PlatformIO firmware for both ESP targets.
+
+### Team
+
+**[@Ayush Anand](https://github.com/iayushanand)**
+**[@Krishay](https://github.com/SinisterDeveloper)**
+**[@Geetha Pai](https://www.linkedin.com/in/geetha-pai-18666a35b/)**
+**[@Krish Kavin](https://www.linkedin.com/in/krin58/)**
 
 ## Architecture Overview
 
