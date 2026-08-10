@@ -1,12 +1,22 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useDevices, useDeleteDevice, useDeviceMessages } from "@/hooks/use-api";
+import { useDevices, useDeleteDevice, useDeviceMessages, useBlockDevice, useGatewayStatus } from "@/hooks/use-api";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { AddDeviceDialog } from "@/components/AddDeviceDialog";
 import { PendingDeviceCard } from "@/components/PendingDeviceCard";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 function DeviceMessages({ deviceId }: { deviceId: string }) {
   const { data: messages, isLoading } = useDeviceMessages(deviceId);
@@ -38,19 +48,45 @@ function DeviceMessages({ deviceId }: { deviceId: string }) {
   );
 }
 
+function maskPuf(puf: string, reveal: boolean): string {
+  if (reveal) return puf;
+  return `${puf.slice(0, 16)}…${puf.slice(-8)} (${puf.length} hex)`;
+}
+
+function maskKey(k: string, reveal: boolean): string {
+  if (reveal) return k;
+  return `${k.slice(0, 24)}…${k.slice(-8)} (${k.length} chars)`;
+}
+
 export default function Devices() {
   const { data: devices, isLoading } = useDevices();
   const deleteMutation = useDeleteDevice();
+  const blockMutation = useBlockDevice();
+  const { data: gatewayStatus } = useGatewayStatus();
   const { toast } = useToast();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [revealMap, setRevealMap] = useState<Record<string, boolean>>({});
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const handleDelete = async (id: string) => {
     try {
       await deleteMutation.mutateAsync(id);
       toast({ title: `Device ${id} deleted` });
-    } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      setConfirmDeleteId(null);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    }
+  };
+
+  const handleBlock = async (device: { sram: string; mac: string }) => {
+    try {
+      await blockMutation.mutateAsync({ sram: device.sram, mac: device.mac });
+      toast({ title: `Blocked ${device.mac} at gateway` });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ title: "Block failed", description: msg, variant: "destructive" });
     }
   };
 
@@ -105,12 +141,21 @@ export default function Devices() {
                       </div>
                     </div>
                   </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-amber-600 hover:text-amber-600"
+                        onClick={(e) => { e.stopPropagation(); handleBlock({ sram: device.puf, mac: device.mac }); }}
+                        disabled={blockMutation.isPending}
+                      >
+                        Block at gateway
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"
                         className="text-destructive hover:text-destructive"
-                        onClick={(e) => { e.stopPropagation(); handleDelete(device.id); }}
+                        onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(device.id); }}
                       >
                         Delete
                       </Button>
@@ -131,7 +176,14 @@ export default function Devices() {
                       <div className="grid gap-3 p-4 text-xs md:grid-cols-2">
                         <div>
                           <span className="text-muted-foreground">PUF:</span>{" "}
-                          <span className="font-mono text-foreground">{device.puf}</span>
+                          <span className="font-mono text-foreground break-all">{maskPuf(device.puf, !!revealMap[device.id])}</span>{" "}
+                          <button
+                            type="button"
+                            className="ml-2 underline text-[11px]"
+                            onClick={() => setRevealMap((m) => ({ ...m, [device.id]: !m[device.id] }))}
+                          >
+                            {revealMap[device.id] ? "Hide" : "Reveal"}
+                          </button>
                         </div>
                         <div>
                           <span className="text-muted-foreground">Firmware:</span>{" "}
@@ -139,8 +191,18 @@ export default function Devices() {
                         </div>
                         <div className="md:col-span-2">
                           <span className="text-muted-foreground">Public Key:</span>{" "}
-                          <span className="font-mono text-foreground break-all">{device.publicKey.slice(0, 64)}…</span>
+                          <span className="font-mono text-foreground break-all">{maskKey(device.publicKey, !!revealMap[device.id])}</span>{" "}
+                          <button
+                            type="button"
+                            className="ml-2 underline text-[11px]"
+                            onClick={() => setRevealMap((m) => ({ ...m, [device.id]: !m[device.id] }))}
+                          >
+                            {revealMap[device.id] ? "Hide" : "Reveal"}
+                          </button>
                         </div>
+                        {gatewayStatus?.blockedDevices?.some((b) => b.mac === device.mac) && (
+                          <div className="md:col-span-2 text-amber-600">Blocked at gateway</div>
+                        )}
                       </div>
                       <div className="border-t">
                         <DeviceMessages deviceId={device.id} />
@@ -153,6 +215,26 @@ export default function Devices() {
           })}
         </div>
       )}
+
+      <AlertDialog open={!!confirmDeleteId} onOpenChange={(o) => !o && setConfirmDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete device #{confirmDeleteId}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the device and its Kyber secret from server memory. Messages remain in logs but the device cannot authenticate until re-created. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => confirmDeleteId && handleDelete(confirmDeleteId)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

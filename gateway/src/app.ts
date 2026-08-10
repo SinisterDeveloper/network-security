@@ -1,4 +1,5 @@
 import express from 'express';
+import cors from 'cors';
 import crypto from 'crypto';
 import os from 'os';
 import fs from 'fs';
@@ -11,8 +12,19 @@ import { EXPECTED_SRAM_HEX_LEN, FIRMWARE_HASH_REGEX } from './shared.js';
 
 const config = loadConfig();
 
+function gatewayAdminAuth(req: express.Request, res: express.Response, next: express.NextFunction): void {
+  if (!config.adminKey) { next(); return; }
+  const provided = req.headers['x-admin-key'] as string | undefined;
+  if (provided !== config.adminKey) {
+    res.status(401).json({ error: 'Unauthorized: invalid or missing X-Admin-Key' });
+    return;
+  }
+  next();
+}
+
 export function createGatewayApp() {
   const app = express();
+  app.use(cors());
   app.use(express.json({ limit: '50kb' }));
 
   // Health + blocked list
@@ -46,7 +58,7 @@ export function createGatewayApp() {
   });
 
   // Operator: permanently block a device by SRAM
-  app.post('/admin/block', (req, res) => {
+  app.post('/admin/block', gatewayAdminAuth, (req, res) => {
     const { sram, mac } = req.body || {};
     if (!sram || typeof sram !== 'string' || !parseSramHex(sram)) {
       return res.status(400).json({ error: 'Valid sram hex (1024 chars) required' });
@@ -56,7 +68,7 @@ export function createGatewayApp() {
   });
 
   // Unblock helper for MVP
-  app.delete('/admin/block', (req, res) => {
+  app.delete('/admin/block', gatewayAdminAuth, (req, res) => {
     const { sram, mac } = req.body || {};
     const list = getBlockedDevices();
     const before = list.length;

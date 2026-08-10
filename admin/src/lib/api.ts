@@ -2,6 +2,10 @@ export const API_BASE =
   (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, "") ||
   "http://localhost:3000";
 
+export const GATEWAY_BASE =
+  (import.meta.env.VITE_GATEWAY_BASE as string | undefined)?.replace(/\/$/, "") ||
+  "http://localhost:8824";
+
 const ADMIN_KEY = (import.meta.env.VITE_ADMIN_KEY as string | undefined) || "";
 
 export interface Message {
@@ -82,6 +86,35 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return JSON.parse(text) as T;
 }
 
+async function gatewayFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...((init?.headers as Record<string, string>) || {}),
+  };
+  if (ADMIN_KEY) headers["X-Admin-Key"] = ADMIN_KEY;
+  const res = await fetch(`${GATEWAY_BASE}${path}`, { ...init, headers });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({} as Record<string, unknown>));
+    const msg =
+      (body as { error?: string }).error ||
+      (body as { message?: string }).message ||
+      `Gateway error ${res.status}`;
+    throw new ApiError(msg, res.status);
+  }
+  if (res.status === 204) return undefined as T;
+  const text = await res.text();
+  if (!text) return undefined as T;
+  return JSON.parse(text) as T;
+}
+
+export interface BlockedEntry {
+  mac?: string;
+  sram?: string;
+  blockedAt: number;
+  lastAttempt?: number;
+  attemptCount?: number;
+}
+
 export const api = {
   getDevices: () => apiFetch<Device[]>("/client/metadata"),
   getAdminLogs: () => apiFetch<AdminLogsResponse>("/admin/logs"),
@@ -93,5 +126,17 @@ export const api = {
     apiFetch<{ deleted: boolean; id: string }>("/client/device", {
       method: "DELETE",
       body: JSON.stringify({ id }),
+    }),
+  getAdminRetry: () => apiFetch<{ pending: number }>("/admin/retry"),
+  getGatewayStatus: () => gatewayFetch<{ status: string; blockedDevices: BlockedEntry[] }>("/"),
+  blockDevice: (payload: { sram: string; mac?: string }) =>
+    gatewayFetch<{ blocked: boolean; entry: BlockedEntry }>("/admin/block", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  unblockDevice: (payload: { sram?: string; mac?: string }) =>
+    gatewayFetch<{ unblocked: number }>("/admin/block", {
+      method: "DELETE",
+      body: JSON.stringify(payload),
     }),
 };

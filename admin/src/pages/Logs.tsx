@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { useAdminLogs } from "@/hooks/use-api";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,29 +19,6 @@ export default function Logs() {
     d.messages.map((m) => ({ ...m, deviceName: d.name }))
   );
   allMessages.sort((a, b) => b.timestamp - a.timestamp);
-
-  useEffect(() => {
-    if (!data) return;
-    const sampleDevice = deviceList[0];
-    const sampleMessage = allMessages[0];
-    const emptyPayloads = allMessages.filter(
-      (m) => m.data === undefined || m.data === null || m.data === ""
-    );
-    console.groupCollapsed("[Logs] admin-logs payload");
-    console.debug("raw data", data);
-    console.debug("devices", deviceList.length, "logs", logEntries.length, "messages", allMessages.length);
-    if (sampleDevice) {
-      console.debug("sample device", sampleDevice);
-      console.debug("sample device messages", sampleDevice.messages?.[0]);
-    }
-    if (sampleMessage) {
-      console.debug("sample message", sampleMessage);
-    }
-    if (emptyPayloads.length > 0) {
-      console.warn("messages with empty data", emptyPayloads.slice(0, 5));
-    }
-    console.groupEnd();
-  }, [data]);
 
   const copyHash = (hash: string) => {
     navigator.clipboard.writeText(hash);
@@ -92,14 +69,19 @@ export default function Logs() {
     }
   };
 
-  const getMessagePayload = (msg: any) =>
-    msg?.data ?? msg?.message?.data ?? msg?.payload ?? msg?.body ?? msg?.value ?? null;
+  const getMessagePayload = (msg: unknown) => {
+    const m = msg as Record<string, unknown>;
+    return (m?.data ?? (m?.message as Record<string, unknown>)?.data ?? m?.payload ?? m?.body ?? m?.value ?? null) as unknown;
+  };
 
   const getPreview = (value: unknown, limit = 120) => {
     const formatted = formatValue(value);
     if (formatted.length <= limit) return { text: formatted, truncated: false };
     return { text: `${formatted.slice(0, limit)}…`, truncated: true };
   };
+
+  const buildPolygonscanUrl = (hash: string) =>
+    `https://amoy.polygonscan.com/tx/${encodeURIComponent(hash)}`;
 
   return (
     <div className="space-y-6">
@@ -180,15 +162,19 @@ export default function Logs() {
                       </span>
                     </TableCell>
                     <TableCell>
-                      <a
-                        href={`https://amoy.polygonscan.com/`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity text-[11px] uppercase tracking-wider text-muted-foreground hover:text-foreground"
-                      >
-                        View on Polygonscan
-                      </a>
+                      {msg.hash ? (
+                        <a
+                          href={buildPolygonscanUrl(msg.hash)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity text-[11px] uppercase tracking-wider text-muted-foreground hover:text-foreground"
+                        >
+                          View on Polygonscan
+                        </a>
+                      ) : (
+                        <span className="text-[11px] text-muted-foreground/50">No hash</span>
+                      )}
                     </TableCell>
                   </motion.tr>
                 );
@@ -276,11 +262,17 @@ export default function Logs() {
               <Button size="sm" variant="outline" onClick={() => selectedHash && copyHash(selectedHash)}>
                 Copy
               </Button>
-              <Button size="sm" variant="outline" asChild>
-                <a href="https://amoy.polygonscan.com/" target="_blank" rel="noopener noreferrer">
+              {selectedHash ? (
+                <Button size="sm" variant="outline" asChild>
+                  <a href={buildPolygonscanUrl(selectedHash)} target="_blank" rel="noopener noreferrer">
+                    View on Polygonscan
+                  </a>
+                </Button>
+              ) : (
+                <Button size="sm" variant="outline" disabled>
                   View on Polygonscan
-                </a>
-              </Button>
+                </Button>
+              )}
             </div>
           </div>
         </DialogContent>

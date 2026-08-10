@@ -10,7 +10,15 @@ import Devices from "./pages/Devices";
 import Logs from "./pages/Logs";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+      staleTime: 5000,
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

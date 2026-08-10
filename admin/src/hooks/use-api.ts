@@ -17,6 +17,11 @@ export function useAdminLogs() {
   });
 }
 
+export function useAdminLogsDevices(): { devices: import("@/lib/api").Device[]; isLoading: boolean } {
+  const { data, isLoading } = useAdminLogs();
+  return { devices: Array.isArray(data?.devices) ? data.devices : [], isLoading };
+}
+
 export function usePendingDevice() {
   return useQuery({
     queryKey: ["pending-device"],
@@ -53,5 +58,37 @@ export function useDeleteDevice() {
       qc.invalidateQueries({ queryKey: ["devices"] });
       qc.invalidateQueries({ queryKey: ["admin-logs"] });
     },
+  });
+}
+
+export function useGatewayStatus() {
+  return useQuery({
+    queryKey: ["gateway-status"],
+    queryFn: api.getGatewayStatus,
+    refetchInterval: 15000,
+  });
+}
+
+export function useBlockDevice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { sram: string; mac?: string }) => api.blockDevice(payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["gateway-status"] }),
+  });
+}
+
+export function useUnblockDevice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { sram?: string; mac?: string }) => api.unblockDevice(payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["gateway-status"] }),
+  });
+}
+
+export function useAdminRetry() {
+  return useQuery({
+    queryKey: ["admin-retry"],
+    queryFn: api.getAdminRetry,
+    refetchInterval: 15000,
   });
 }

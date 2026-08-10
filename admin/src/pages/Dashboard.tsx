@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { useAdminLogs } from "@/hooks/use-api";
+import { useAdminLogs, useAdminRetry, useGatewayStatus } from "@/hooks/use-api";
 import { StatCard } from "@/components/StatCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -7,6 +7,8 @@ import { PendingDeviceCard } from "@/components/PendingDeviceCard";
 
 export default function Dashboard() {
   const { data, isLoading } = useAdminLogs();
+  const { data: retryData } = useAdminRetry();
+  const { data: gatewayStatus } = useGatewayStatus();
   const deviceList = Array.isArray(data?.devices) ? data.devices : [];
 
   const allMessages = deviceList.flatMap((d) =>
@@ -39,7 +41,16 @@ export default function Dashboard() {
         <div className="grid gap-4 md:grid-cols-3">
           <StatCard title="Total Devices" value={totalDevices} index={0} />
           <StatCard title="Messages (24h)" value={msgs24h} subtitle={`${totalMessages} total`} index={1} />
-          <StatCard title="Blockchain" value="Amoy" subtitle="Polygon testnet" index={2} />
+          <StatCard
+            title="Blockchain"
+            value={retryData?.pending != null && retryData.pending > 0 ? `${retryData.pending} pending` : "Amoy"}
+            subtitle={
+              gatewayStatus
+                ? `Gateway ${gatewayStatus.blockedDevices.length} blocked`
+                : "Polygon testnet"
+            }
+            index={2}
+          />
         </div>
       )}
 
