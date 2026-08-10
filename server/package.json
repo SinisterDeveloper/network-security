@@ -26,8 +26,7 @@
     "crystals-kyber-js": "^2.7.0",
     "dotenv": "^17.3.1",
     "ethers": "^6.16.0",
-    "express": "^5.2.1",
-    "hardhat": "^3.1.12"
+    "express": "^5.2.1"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "^4.0.6",

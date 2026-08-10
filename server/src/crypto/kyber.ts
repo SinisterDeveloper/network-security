@@ -1,5 +1,5 @@
 import { MlKem768 } from 'crystals-kyber-js';
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
+import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'crypto';
 
 const kyberInstance = new MlKem768();
 
@@ -12,7 +12,8 @@ function fromBase64(encoded: string): Uint8Array {
 }
 
 function deriveAes256Key(sharedSecret: Uint8Array): Buffer {
-  return createHash('sha256').update(sharedSecret).digest();
+  // HKDF-SHA256 is the correct KDF for KEM shared secrets (not raw SHA256)
+  return Buffer.from(hkdfSync('sha256', Buffer.from(sharedSecret), Buffer.alloc(0), Buffer.from('EmbSec-AES256GCM'), 32));
 }
 
 export async function generateKyberKeyPair(): Promise<{

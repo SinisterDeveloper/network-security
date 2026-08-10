@@ -3,9 +3,10 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 import { createApp } from "./server.js";
+import { getConfig } from "./config.js";
+import { blockchainService } from "./services/BlockchainService.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-// Load .env from monorepo root (works for both ts-node and compiled dist)
 const candidates = [
   join(__dirname, "../../../.env"),
   join(__dirname, "../../.env"),
@@ -18,12 +19,23 @@ for (const p of candidates) {
   }
 }
 
-const PORT = process.env.SERVER_PORT ? parseInt(process.env.SERVER_PORT, 10) : (process.env.PORT ? parseInt(process.env.PORT, 10) : 3000);
-
 async function bootstrap(): Promise<void> {
+  const cfg = getConfig();
+  if (!cfg.adminKey) {
+    console.warn("[server] ADMIN_KEY not set — /admin/* open (dev mode). Set ADMIN_KEY in .env for MVP security.");
+  }
+  if (!cfg.privateKey || !cfg.contractAddress) {
+    console.warn("[server] PRIVATE_KEY/CONTRACT_ADDRESS missing — blockchain anchoring will queue pending hashes.");
+  }
+
   const app = await createApp();
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[server] Listening on http://localhost:${PORT}`);
+
+  // Fire-and-forget retry interval — previously never started
+  blockchainService.startRetryInterval(30_000);
+
+  app.listen(cfg.port, '0.0.0.0', () => {
+    console.log(`[server] Listening on http://localhost:${cfg.port}`);
+    if (cfg.corsOrigins.length > 0) console.log(`[server] CORS origins: ${cfg.corsOrigins.join(', ')}`);
   });
 }
 

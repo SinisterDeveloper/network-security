@@ -1,12 +1,9 @@
 import { Request, Response } from 'express';
-import { Device } from '../../types.js';
-import { deviceStore, Logs } from '../../deviceStore.js';
+import { deviceRepository } from '../../repos/DeviceRepository.js';
+import { logRepository } from '../../repos/LogRepository.js';
 
-/**
- * GET /admin/logs
- * Returns every registered Device in the store.
- */
 export const GET = (_req: Request, res: Response): void => {
-  const devices: Device[] = Array.from(deviceStore.values());
-  res.status(200).json({ devices, logs: Logs });
+  const devices = deviceRepository.getAll();
+  const logs = logRepository.getAll();
+  res.status(200).json({ devices, logs });
 };

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
-import { deviceStore } from '../../deviceStore.js';
+import { deviceRepository } from '../../repos/DeviceRepository.js';
+import { logRepository } from '../../repos/LogRepository.js';
 import { encryptKyberAesGcmToBase64 } from '../../crypto/kyber.js';
 
 /**
@@ -26,15 +27,16 @@ export const POST = async (req: Request, res: Response): Promise<void> => {
   if (publicKey && typeof publicKey === 'string') {
     resolvedPublicKey = publicKey;
   } else if (mac && typeof mac === 'string') {
-    const device = Array.from(deviceStore.values()).find((d) => d.mac === mac);
+    const device = deviceRepository.findByMac(mac);
     if (!device) {
       res.status(404).json({ error: 'Device not found for given mac' });
       return;
     }
     resolvedPublicKey = device.publicKey;
   } else if (id !== undefined) {
-    const normalizedId = String(id).trim();
-    const device = deviceStore.get(normalizedId);
+    const normalizedId = deviceRepository.normalizeId(id);
+    if (normalizedId === null) { res.status(400).json({ error: '"id" must be a 5-digit numeric value' }); return; }
+    const device = deviceRepository.get(normalizedId);
     if (!device) {
       res.status(404).json({ error: 'Device not found for given id' });
       return;
@@ -52,6 +54,7 @@ export const POST = async (req: Request, res: Response): Promise<void> => {
       plaintext,
       publicKeyBase64: resolvedPublicKey,
     });
+    logRepository.push('ENCRYPTION', { plaintextLength: plaintext.length }, null);
     res.status(200).json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Encryption failed';

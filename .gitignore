@@ -144,3 +144,9 @@ vite.config.ts.timestamp-*
 
 # Gateway persisted state (generated at runtime)
 gateway/data.json
+
+# ESP
+esp/include/config.h
+esp/.pio/
+esp/.vscode/
+esp/.pioenvs/

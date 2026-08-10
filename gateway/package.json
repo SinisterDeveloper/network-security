@@ -1,12 +1,23 @@
 {
   "name": "@embsec/gateway",
   "version": "1.0.0",
-  "description": "Gateway for EmbSecServer",
-  "main": "index.js",
+  "description": "Gateway for EmbSecServer — stateless PUF firewall proxy",
+  "type": "module",
+  "main": "dist/index.js",
   "scripts": {
-    "start": "node index.js"
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "node --loader ts-node/esm src/index.ts"
   },
   "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
     "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.19.15",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.8.0"
   }
 }

@@ -1,12 +1,9 @@
 import { Request, Response } from 'express';
-import { deviceStore, logAction } from '../../deviceStore.js';
+import { deviceRepository } from '../../repos/DeviceRepository.js';
+import { logRepository } from '../../repos/LogRepository.js';
 
-/**
- * GET /client/metadata
- * Returns all registered devices.
- */
 export const GET = (_req: Request, res: Response): void => {
-  const devices = Array.from(deviceStore.values());
-  logAction('METADATA_LIST', devices, null);
+  const devices = deviceRepository.getAll();
+  logRepository.push('METADATA_LIST', devices, null);
   res.status(200).json(devices);
 };
